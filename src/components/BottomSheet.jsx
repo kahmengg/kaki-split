@@ -26,7 +26,7 @@ export default function BottomSheet({ isOpen, onClose, children, title, height =
       {/* Sheet */}
       <div
         ref={sheetRef}
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white rounded-t-3xl z-50 shadow-2xl"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white rounded-t-2xl z-50 shadow-2xl"
         style={{
           maxHeight: '92vh',
           animation: 'slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1)',

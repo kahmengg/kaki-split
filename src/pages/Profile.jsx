@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CURRENT_USER } from '../data/mockData'
 import Avatar from '../components/Avatar'
@@ -6,15 +6,39 @@ import BottomNav from '../components/BottomNav'
 
 export default function Profile() {
   const navigate = useNavigate()
+  const fileInputRef = useRef(null)
+
   const [name, setName] = useState(CURRENT_USER.name)
   const [paynow, setPaynow] = useState(CURRENT_USER.paynow_number || '')
-  const [grabpay, setGrabpay] = useState(CURRENT_USER.grabpay_handle || '')
   const [paylah, setPaylah] = useState(CURRENT_USER.paylah_handle || '')
+  const [avatarUrl, setAvatarUrl] = useState(CURRENT_USER.avatar_url || '')
   const [saved, setSaved] = useState(false)
+
+  const profileUser = useMemo(
+    () => ({ ...CURRENT_USER, name, avatar_url: avatarUrl }),
+    [name, avatarUrl]
+  )
 
   const handleSave = () => {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleAvatarPick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setAvatarUrl(reader.result)
+      }
+    }
+    reader.readAsDataURL(file)
   }
 
   return (
@@ -26,17 +50,33 @@ export default function Profile() {
         {/* Avatar section */}
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar user={CURRENT_USER} size="xl" />
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white">
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+            <Avatar user={profileUser} size="xl" />
+            <button
+              onClick={handleAvatarPick}
+              className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
               </svg>
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
           </div>
           <div>
-            <h2 className="font-bold text-gray-900 text-lg">{CURRENT_USER.name}</h2>
+            <h2 className="font-bold text-gray-900 text-lg">{name}</h2>
             <p className="text-gray-500 text-sm">{CURRENT_USER.email}</p>
+            <button
+              onClick={handleAvatarPick}
+              className="text-xs font-semibold text-emerald-600 mt-1"
+            >
+              Edit photo
+            </button>
           </div>
         </div>
       </div>
@@ -93,20 +133,6 @@ export default function Profile() {
 
             <div>
               <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5">
-                <span className="w-5 h-5 bg-green-50 rounded-lg flex items-center justify-center text-sm">🟢</span>
-                GrabPay handle
-              </label>
-              <input
-                type="text"
-                value={grabpay}
-                onChange={e => setGrabpay(e.target.value)}
-                placeholder="@username"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5">
                 <span className="w-5 h-5 bg-blue-50 rounded-lg flex items-center justify-center text-sm">🔵</span>
                 PayLah handle
               </label>
@@ -124,7 +150,7 @@ export default function Profile() {
         {/* Save button */}
         <button
           onClick={handleSave}
-          className={`w-full py-4 rounded-2xl font-bold text-base transition-all ${
+          className={`w-full py-4 rounded-full font-bold text-base transition-all ${
             saved
               ? 'bg-gray-100 text-gray-500'
               : 'bg-emerald-500 text-white'
@@ -149,8 +175,7 @@ export default function Profile() {
           </button>
         </div>
 
-        {/* Version */}
-        <p className="text-center text-xs text-gray-300 pb-2">FairSplit v1.0 · Made with ❤️ in Singapore</p>
+        <p className="text-center text-xs text-gray-300 pb-2">FairSplit v1.0</p>
       </div>
 
       <BottomNav onFABPress={() => navigate('/dashboard')} />

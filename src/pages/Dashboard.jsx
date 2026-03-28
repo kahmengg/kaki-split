@@ -67,6 +67,7 @@ export default function Dashboard() {
 
   const totalOwed = GROUPS.reduce((sum, g) => g.my_balance > 0 ? sum + g.my_balance : sum, 0)
   const totalOwe = GROUPS.reduce((sum, g) => g.my_balance < 0 ? sum + Math.abs(g.my_balance) : sum, 0)
+  const firstGroupOwed = GROUPS.find(g => g.my_balance > 0)
 
   const handleCreateGroup = () => {
     navigate('/dashboard')
@@ -109,8 +110,29 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Groups list */}
-      <div className="px-4 pt-5">
+        {/* 24h debt reminder */}
+        {firstGroupOwed && (
+          <div className="px-4 pt-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-2.5">
+              <span className="text-base">⏰</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-amber-800 text-xs font-medium leading-relaxed">
+                  You are owed {formatMoney(totalOwed)} from {firstGroupOwed.name} in the last 24h.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate(`/groups/${firstGroupOwed.id}`)}
+                className="text-amber-700 font-bold text-xs bg-amber-100 px-2.5 py-1.5 rounded-full flex-shrink-0"
+              >
+                Remind
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Groups list */}
+        <div className="px-4 pt-5">
+
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-gray-900">Your groups</h2>
           <button

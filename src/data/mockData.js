@@ -67,7 +67,9 @@ export const GROUPS = [
     created_by: 'user-1',
     invite_code: 'BALI2026',
     base_currency: 'SGD',
-    notes: 'Hotel: The Layar, Seminyak. Check-in: Apr 12. WiFi: layar2024',
+      telegramConnected: true,
+      telegramGroupName: 'Bali Crew 🌴',
+
     created_at: '2026-03-01T10:00:00Z',
     member_ids: ['user-1', 'user-2', 'user-3', 'user-4'],
     my_balance: -87.40, // negative = I owe
@@ -80,7 +82,9 @@ export const GROUPS = [
     created_by: 'user-2',
     invite_code: 'ROOM88',
     base_currency: 'SGD',
-    notes: null,
+      telegramConnected: false,
+      telegramGroupName: null,
+
     created_at: '2026-01-15T09:00:00Z',
     member_ids: ['user-1', 'user-2', 'user-3'],
     my_balance: 34.20, // positive = I'm owed
@@ -93,7 +97,9 @@ export const GROUPS = [
     created_by: 'user-1',
     invite_code: 'TOKYO99',
     base_currency: 'SGD',
-    notes: null,
+      telegramConnected: false,
+      telegramGroupName: null,
+
     created_at: '2026-02-10T07:00:00Z',
     member_ids: ['user-1', 'user-5'],
     my_balance: 0,
@@ -117,7 +123,7 @@ export const EXPENSES = {
       category: 'food',
       created_by: 'user-2',
       created_at: '2026-03-27T14:30:00Z',
-      reactions: { '👍': ['user-1', 'user-3'], '😳': ['user-4'] },
+
       splits: [
         { user_id: 'user-1', amount: 62.00, is_settled: false },
         { user_id: 'user-2', amount: 62.00, is_settled: true },
@@ -138,7 +144,7 @@ export const EXPENSES = {
       category: 'accommodation',
       created_by: 'user-1',
       created_at: '2026-03-26T10:00:00Z',
-      reactions: { '👍': ['user-2', 'user-3', 'user-4'] },
+
       splits: [
         { user_id: 'user-1', amount: 150.00, is_settled: true },
         { user_id: 'user-2', amount: 150.00, is_settled: false },
@@ -159,7 +165,7 @@ export const EXPENSES = {
       category: 'transport',
       created_by: 'user-3',
       created_at: '2026-03-25T07:00:00Z',
-      reactions: {},
+
       splits: [
         { user_id: 'user-1', amount: 8.63, is_settled: false },
         { user_id: 'user-2', amount: 8.63, is_settled: false },
@@ -180,7 +186,7 @@ export const EXPENSES = {
       category: 'activities',
       created_by: 'user-4',
       created_at: '2026-03-24T09:00:00Z',
-      reactions: { '😂': ['user-1', 'user-2'] },
+
       splits: [
         { user_id: 'user-1', amount: 45.00, is_settled: false },
         { user_id: 'user-2', amount: 45.00, is_settled: false },
@@ -201,7 +207,7 @@ export const EXPENSES = {
       category: 'food',
       created_by: 'user-2',
       created_at: '2026-03-23T20:00:00Z',
-      reactions: { '👍': ['user-1', 'user-3', 'user-4'] },
+
       splits: [
         { user_id: 'user-1', amount: 7.20, is_settled: false },
         { user_id: 'user-2', amount: 7.20, is_settled: true },
@@ -222,7 +228,7 @@ export const EXPENSES = {
       category: 'transport',
       created_by: 'user-1',
       created_at: '2026-03-01T12:00:00Z',
-      reactions: {},
+
       splits: [
         { user_id: 'user-1', amount: 38.00, is_settled: true },
         { user_id: 'user-2', amount: 38.00, is_settled: true },
@@ -245,7 +251,7 @@ export const EXPENSES = {
       category: 'other',
       created_by: 'user-1',
       created_at: '2026-03-15T09:00:00Z',
-      reactions: {},
+
       splits: [
         { user_id: 'user-1', amount: 59.50, is_settled: true },
         { user_id: 'user-2', amount: 59.50, is_settled: false },
@@ -265,7 +271,7 @@ export const EXPENSES = {
       category: 'food',
       created_by: 'user-2',
       created_at: '2026-03-20T11:00:00Z',
-      reactions: { '👍': ['user-1'] },
+
       splits: [
         { user_id: 'user-1', amount: 31.43, is_settled: false },
         { user_id: 'user-2', amount: 31.44, is_settled: true },
@@ -287,7 +293,7 @@ export const EXPENSES = {
       category: 'food',
       created_by: 'user-1',
       created_at: '2026-02-15T07:30:00Z',
-      reactions: { '👍': ['user-5'] },
+
       splits: [
         { user_id: 'user-1', amount: 31.20, is_settled: true },
         { user_id: 'user-5', amount: 31.20, is_settled: true },
