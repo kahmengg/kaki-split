@@ -1,21 +1,21 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { GROUPS, USERS, CURRENT_USER, formatMoney, timeAgo } from '../data/mockData'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import BottomSheet from '../components/BottomSheet'
+import { useToast } from '../components/Toast'
+import { useAuth } from '../hooks/useAuth'
+import { createGroup, fetchDashboardData } from '../lib/fairsplitApi'
+import { formatMoney, timeAgo } from '../lib/format'
 
-function GroupCard({ group, onClick }) {
-  const members = group.member_ids.map(id => USERS[id]).filter(Boolean)
+function GroupCard({ group, usersById, onClick }) {
+  const members = group.member_ids.map((id) => usersById[id]).filter(Boolean)
   const balance = group.my_balance
   const visibleMembers = members.slice(0, 4)
   const overflow = members.length - 4
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full bg-white rounded-2xl border border-gray-100 p-4 text-left active:scale-[0.98] transition-transform shadow-sm"
-    >
+    <button onClick={onClick} className="w-full bg-white rounded-2xl border border-gray-100 p-4 text-left active:scale-[0.98] transition-transform shadow-sm">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900 text-base truncate">{group.name}</h3>
@@ -26,12 +26,12 @@ function GroupCard({ group, onClick }) {
             <span className="text-gray-400 text-sm font-medium">Settled ✓</span>
           ) : balance < 0 ? (
             <div>
-              <div className="text-red-500 font-bold text-sm">−{formatMoney(Math.abs(balance))}</div>
+              <div className="text-red-500 font-bold text-sm">−{formatMoney(Math.abs(balance), group.base_currency)}</div>
               <div className="text-red-400 text-xs">you owe</div>
             </div>
           ) : (
             <div>
-              <div className="text-emerald-600 font-bold text-sm">+{formatMoney(balance)}</div>
+              <div className="text-emerald-600 font-bold text-sm">+{formatMoney(balance, group.base_currency)}</div>
               <div className="text-emerald-500 text-xs">owed to you</div>
             </div>
           )}
@@ -39,10 +39,9 @@ function GroupCard({ group, onClick }) {
       </div>
 
       <div className="flex items-center justify-between mt-3">
-        {/* Member avatars */}
         <div className="flex -space-x-2">
-          {visibleMembers.map(user => (
-            <Avatar key={user.id} user={user} size="sm" className="border-2 border-white" />
+          {visibleMembers.map((member) => (
+            <Avatar key={member.id} user={member} size="sm" className="border-2 border-white" />
           ))}
           {overflow > 0 && (
             <div className="w-8 h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-xs font-bold text-gray-500">
@@ -50,10 +49,7 @@ function GroupCard({ group, onClick }) {
             </div>
           )}
         </div>
-        {/* Total */}
-        <span className="text-xs text-gray-400">
-          {formatMoney(group.total_spent)} total
-        </span>
+        <span className="text-xs text-gray-400">{formatMoney(group.total_spent, group.base_currency)} total</span>
       </div>
     </button>
   )
@@ -61,33 +57,87 @@ function GroupCard({ group, onClick }) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const showToast = useToast()
+  const { user, profile, refreshProfile } = useAuth()
+
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [currency, setCurrency] = useState('SGD')
+  const [groups, setGroups] = useState([])
+  const [usersById, setUsersById] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
 
-  const totalOwed = GROUPS.reduce((sum, g) => g.my_balance > 0 ? sum + g.my_balance : sum, 0)
-  const totalOwe = GROUPS.reduce((sum, g) => g.my_balance < 0 ? sum + Math.abs(g.my_balance) : sum, 0)
-  const firstGroupOwed = GROUPS.find(g => g.my_balance > 0)
+  useEffect(() => {
+    if (!user?.id) return
 
-  const handleCreateGroup = () => {
-    navigate('/dashboard')
-    setShowNewGroup(false)
-    setGroupName('')
+    async function loadDashboard() {
+      setLoading(true)
+      try {
+        await refreshProfile()
+        const data = await fetchDashboardData(user.id)
+        setGroups(data.groups)
+        setUsersById(data.usersById)
+      } catch (error) {
+        showToast(error.message || 'Failed to load groups', 'error')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboard()
+  }, [refreshProfile, showToast, user?.id])
+
+  const totalOwed = useMemo(() => groups.reduce((sum, group) => (group.my_balance > 0 ? sum + group.my_balance : sum), 0), [groups])
+  const totalOwe = useMemo(() => groups.reduce((sum, group) => (group.my_balance < 0 ? sum + Math.abs(group.my_balance) : sum), 0), [groups])
+  const firstGroupOwed = groups.find((group) => group.my_balance > 0)
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) return
+    setCreating(true)
+    try {
+      const newGroup = await createGroup({ userId: user.id, name: groupName, baseCurrency: currency })
+      showToast('Group created successfully', 'success')
+      setShowNewGroup(false)
+      setGroupName('')
+
+      const data = await fetchDashboardData(user.id)
+      setGroups(data.groups)
+      setUsersById(data.usersById)
+      navigate(`/groups/${newGroup.id}`)
+    } catch (error) {
+      showToast(error.message || 'Unable to create group', 'error')
+    } finally {
+      setCreating(false)
+    }
   }
+
+  const currentUser = profile
+    ? {
+        ...profile,
+        name: profile.display_name,
+      }
+    : user
+    ? {
+        id: user.id,
+        name: user.email?.split('@')[0] || 'You',
+        display_name: user.email?.split('@')[0] || 'You',
+        email: user.email,
+        avatar_color: '#10b981',
+      }
+    : null
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
-      {/* Header */}
       <div className="bg-white px-5 pt-12 pb-5 border-b border-gray-100">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-black text-gray-900">Hi, {CURRENT_USER.display_name} 👋</h1>
+            <h1 className="text-2xl font-black text-gray-900">Hi, {currentUser?.display_name || currentUser?.name || 'Friend'} 👋</h1>
             <p className="text-gray-500 text-sm mt-0.5">Here's your expense overview</p>
           </div>
-          <Avatar user={CURRENT_USER} size="lg" />
+          <Avatar user={currentUser} size="lg" />
         </div>
 
-        {/* Balance summary strip */}
         <div className="flex gap-3 mt-2">
           {totalOwe > 0 && (
             <div className="flex-1 bg-red-50 rounded-2xl p-3 border border-red-100">
@@ -110,83 +160,65 @@ export default function Dashboard() {
         </div>
       </div>
 
-        {/* 24h debt reminder */}
-        {firstGroupOwed && (
-          <div className="px-4 pt-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-2.5">
-              <span className="text-base">⏰</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-amber-800 text-xs font-medium leading-relaxed">
-                  You are owed {formatMoney(totalOwed)} from {firstGroupOwed.name} in the last 24h.
-                </p>
-              </div>
-              <button
-                onClick={() => navigate(`/groups/${firstGroupOwed.id}`)}
-                className="text-amber-700 font-bold text-xs bg-amber-100 px-2.5 py-1.5 rounded-full flex-shrink-0"
-              >
-                Remind
-              </button>
+      {firstGroupOwed && (
+        <div className="px-4 pt-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-2.5">
+            <span className="text-base">⏰</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-amber-800 text-xs font-medium leading-relaxed">
+                You are owed {formatMoney(totalOwed)} from {firstGroupOwed.name} in the last 24h.
+              </p>
             </div>
+            <button
+              onClick={() => navigate(`/groups/${firstGroupOwed.id}`)}
+              className="text-amber-700 font-bold text-xs bg-amber-100 px-2.5 py-1.5 rounded-full flex-shrink-0"
+            >
+              Remind
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Groups list */}
-        <div className="px-4 pt-5">
-
+      <div className="px-4 pt-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-gray-900">Your groups</h2>
-          <button
-            onClick={() => setShowNewGroup(true)}
-            className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold"
-          >
+          <button onClick={() => setShowNewGroup(true)} className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold">
             <span className="text-lg leading-none">+</span> New
           </button>
         </div>
 
-        {GROUPS.length === 0 ? (
+        {loading ? (
+          <div className="py-14 flex justify-center">
+            <div className="w-9 h-9 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+          </div>
+        ) : groups.length === 0 ? (
           <div className="text-center py-16 px-6">
             <div className="text-6xl mb-4">🍜</div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">No groups yet</h3>
             <p className="text-gray-500 text-sm mb-6">Create a group for your next trip or dinner</p>
-            <button
-              onClick={() => setShowNewGroup(true)}
-              className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl font-bold mb-3"
-            >
+            <button onClick={() => setShowNewGroup(true)} className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl font-bold mb-3">
               Create a group
-            </button>
-            <button className="w-full py-3.5 bg-white border-2 border-gray-200 text-gray-700 rounded-2xl font-semibold">
-              Join with a link
             </button>
           </div>
         ) : (
           <div className="space-y-3">
-            {GROUPS.map(group => (
-              <GroupCard
-                key={group.id}
-                group={group}
-                onClick={() => navigate(`/groups/${group.id}`)}
-              />
+            {groups.map((group) => (
+              <GroupCard key={group.id} group={group} usersById={usersById} onClick={() => navigate(`/groups/${group.id}`)} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Bottom Nav */}
       <BottomNav onFABPress={() => setShowNewGroup(true)} />
 
-      {/* Create Group Sheet */}
-      <BottomSheet
-        isOpen={showNewGroup}
-        onClose={() => setShowNewGroup(false)}
-        title="New Group"
-      >
+      <BottomSheet isOpen={showNewGroup} onClose={() => setShowNewGroup(false)} title="New Group">
         <div className="px-5 py-4 space-y-4">
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-2">Group name</label>
             <input
               type="text"
               value={groupName}
-              onChange={e => setGroupName(e.target.value)}
+              onChange={(event) => setGroupName(event.target.value)}
               placeholder="Bali Trip 🌴"
               className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
               autoFocus
@@ -196,13 +228,13 @@ export default function Dashboard() {
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-2">Base currency</label>
             <div className="grid grid-cols-3 gap-2">
-              {['SGD', 'USD', 'EUR', 'AUD', 'MYR', 'IDR'].map(c => (
+              {['SGD', 'USD', 'EUR', 'AUD', 'MYR', 'IDR'].map((value) => (
                 <button
-                  key={c}
-                  onClick={() => setCurrency(c)}
-                  className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${currency === c ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-600'}`}
+                  key={value}
+                  onClick={() => setCurrency(value)}
+                  className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${currency === value ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-600'}`}
                 >
-                  {c}
+                  {value}
                 </button>
               ))}
             </div>
@@ -210,19 +242,12 @@ export default function Dashboard() {
 
           <button
             onClick={handleCreateGroup}
-            disabled={!groupName.trim()}
+            disabled={!groupName.trim() || creating}
             className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-base disabled:opacity-50 mt-2"
             style={{ boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)' }}
           >
-            Create group
+            {creating ? 'Creating...' : 'Create group'}
           </button>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-400">or</p>
-            <button className="text-emerald-600 font-semibold text-sm mt-1">
-              Join with invite link
-            </button>
-          </div>
         </div>
       </BottomSheet>
     </div>

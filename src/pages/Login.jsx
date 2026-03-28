@@ -1,11 +1,16 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '../components/Toast'
+import { useAuth } from '../hooks/useAuth'
 
 const heroClass = 'from-slate-950 via-slate-900 to-emerald-950'
 const accentCardClass = 'bg-white/10 border-white/15 text-white'
 
 export default function Login() {
   const navigate = useNavigate()
+  const showToast = useToast()
+  const { signIn, signUp, signInWithGoogle } = useAuth()
+
   const [mode, setMode] = useState('login')
   const [authExpanded, setAuthExpanded] = useState(false)
   const [email, setEmail] = useState('')
@@ -16,14 +21,38 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
-    navigate('/dashboard')
+
+    try {
+      if (mode === 'signup') {
+        const result = await signUp({ email, password, name })
+        if (result?.session) {
+          showToast('Account created and signed in', 'success')
+          navigate('/dashboard')
+        } else {
+          showToast('Account created. Check your email to verify before signing in.', 'success')
+          setMode('login')
+        }
+      } else {
+        await signIn({ email, password })
+        showToast('Signed in successfully', 'success')
+        navigate('/dashboard')
+      }
+    } catch (error) {
+      showToast(error.message || 'Unable to authenticate right now', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
+
 
   const handleGoogle = async () => {
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 600))
-    navigate('/dashboard')
+    try {
+      await signInWithGoogle()
+    } catch (error) {
+      showToast(error.message || 'Google sign-in failed', 'error')
+      setLoading(false)
+    }
   }
 
   return (
@@ -34,9 +63,7 @@ export default function Login() {
 
       <div className="relative z-10 px-6 pt-10 pb-6 text-white">
         <div className="flex items-center gap-2 mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-white text-emerald-600 flex items-center justify-center font-black text-lg shadow-sm">
-            FS
-          </div>
+          <div className="w-11 h-11 rounded-2xl bg-white text-emerald-600 flex items-center justify-center font-black text-lg shadow-sm">FS</div>
           <span className="font-bold text-xl tracking-tight">FairSplit</span>
         </div>
 
@@ -45,9 +72,7 @@ export default function Login() {
           Split expenses, not friendships
         </h1>
 
-        <p className="text-emerald-50 mt-4 text-sm leading-6 max-w-[330px]">
-          Track who paid, who owes, and settle quickly.
-        </p>
+        <p className="text-emerald-50 mt-4 text-sm leading-6 max-w-[330px]">Track who paid, who owes, and settle quickly.</p>
 
         <div className="grid grid-cols-3 gap-2 mt-5 text-center">
           <div className={`rounded-2xl py-3 border ${accentCardClass}`}>
@@ -75,11 +100,7 @@ export default function Login() {
         )}
       </div>
 
-      <div
-        className={`relative z-10 mt-auto bg-white rounded-t-[32px] border-t border-white/40 transition-all duration-300 ${
-          authExpanded ? 'pb-8 pt-4' : 'pb-5 pt-3'
-        }`}
-      >
+      <div className={`relative z-10 mt-auto bg-white rounded-t-[32px] border-t border-white/40 transition-all duration-300 ${authExpanded ? 'pb-8 pt-4' : 'pb-5 pt-3'}`}>
         <button
           onClick={() => setAuthExpanded((v) => !v)}
           className="w-full flex flex-col items-center"
@@ -95,17 +116,13 @@ export default function Login() {
             <div className="flex bg-gray-100 rounded-2xl p-1 mb-5">
               <button
                 onClick={() => setMode('login')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                  mode === 'login' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                }`}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${mode === 'login' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
               >
                 Sign in
               </button>
               <button
                 onClick={() => setMode('signup')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                  mode === 'signup' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                }`}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${mode === 'signup' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
               >
                 Create account
               </button>

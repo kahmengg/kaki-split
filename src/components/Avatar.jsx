@@ -1,5 +1,5 @@
 import React from 'react'
-import { getUserInitials } from '../data/mockData'
+import { getUserInitials } from '../lib/format'
 
 export default function Avatar({ user, size = 'md', ring = false, className = '' }) {
   const sizes = {
