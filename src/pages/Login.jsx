@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 
@@ -8,6 +8,7 @@ const accentCardClass = 'bg-white/10 border-white/15 text-white'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const showToast = useToast()
   const { signIn, signUp, signInWithGoogle } = useAuth()
 
@@ -18,6 +19,8 @@ export default function Login() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const nextPath = typeof location.state?.from === 'string' ? location.state.from : '/dashboard'
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -26,16 +29,18 @@ export default function Login() {
       if (mode === 'signup') {
         const result = await signUp({ email, password, name })
         if (result?.session) {
-          showToast('Account created and signed in', 'success')
-          navigate('/dashboard')
+            showToast('Account created and signed in', 'success')
+            navigate(nextPath)
+
         } else {
           showToast('Account created. Check your email to verify before signing in.', 'success')
           setMode('login')
         }
       } else {
-        await signIn({ email, password })
-        showToast('Signed in successfully', 'success')
-        navigate('/dashboard')
+          await signIn({ email, password })
+          showToast('Signed in successfully', 'success')
+          navigate(nextPath)
+
       }
     } catch (error) {
       showToast(error.message || 'Unable to authenticate right now', 'error')

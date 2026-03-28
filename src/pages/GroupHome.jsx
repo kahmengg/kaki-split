@@ -253,7 +253,8 @@ export default function GroupHome() {
 
   const handleShareInvite = async () => {
     try {
-      const inviteUrl = `${window.location.origin}/join/${group.invite_code}`
+        const inviteUrl = `${window.location.origin}/#/join/${group.invite_code}`
+
       await navigator.clipboard.writeText(inviteUrl)
       showToast('Invite link copied!', 'success')
     } catch {
