@@ -13,17 +13,6 @@ function fallbackName(user) {
 async function ensureProfileRow(user) {
   if (!user?.id) return null
 
-  const payload = {
-    id: user.id,
-    display_name: fallbackName(user),
-    email: user.email,
-  }
-
-  const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' })
-  if (error) {
-    throw error
-  }
-
   const { data, error: fetchError } = await supabase
     .from('profiles')
     .select('*')
@@ -31,7 +20,21 @@ async function ensureProfileRow(user) {
     .maybeSingle()
 
   if (fetchError) throw fetchError
-  return data
+
+  if (data) return data
+
+  // Avoid client-side inserts here: profile creation should be handled by the
+  // auth trigger (handle_new_auth_user). Returning a fallback object prevents
+  // RLS failures from blocking the UI when the row has not replicated yet.
+  return {
+    id: user.id,
+    display_name: fallbackName(user),
+    email: user.email,
+    avatar_url: null,
+    avatar_color: null,
+    paynow_number: null,
+    paylah_handle: null,
+  }
 }
 
 export function AuthProvider({ children }) {

@@ -201,9 +201,12 @@ export async function createGroup({ userId, name, baseCurrency = 'SGD' }) {
       invite_code: inviteCode,
     })
     .select('*')
-    .single()
+    .maybeSingle()
 
   if (groupError) throw groupError
+  if (!group) {
+    throw new Error('Unable to create group. Check Supabase RLS policies for groups/group_members.')
+  }
 
   const { error: memberError } = await supabase.from('group_members').insert({
     group_id: group.id,
@@ -400,9 +403,13 @@ export async function saveProfile({ userId, profile }) {
     .update(profile)
     .eq('id', userId)
     .select('*')
-    .single()
+    .maybeSingle()
 
   if (error) throw error
+  if (!data) {
+    throw new Error('Profile not found or not writable. Check Supabase RLS policy for profiles.')
+  }
+
   return toAppUser(data)
 }
 
