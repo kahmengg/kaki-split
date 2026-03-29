@@ -118,15 +118,9 @@ export function AuthProvider({ children }) {
 
     if (error) throw error
 
-    if (data.user) {
-      await ensureProfileRow({
-        ...data.user,
-        user_metadata: {
-          ...data.user.user_metadata,
-          display_name: name || data.user.user_metadata?.display_name,
-        },
-      })
-    }
+    // Profile row creation is deferred to onAuthStateChange after the user
+    // has a confirmed session. Calling ensureProfileRow here (pre-confirmation)
+    // has no auth JWT and will be blocked by RLS.
 
     return data
   }, [])
@@ -134,10 +128,9 @@ export function AuthProvider({ children }) {
   const signInWithGoogle = useCallback(async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/#/dashboard`,
-        },
-
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
     })
 
     if (error) throw error

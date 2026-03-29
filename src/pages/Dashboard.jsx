@@ -90,6 +90,13 @@ export default function Dashboard() {
 
   const totalOwed = useMemo(() => groups.reduce((sum, group) => (group.my_balance > 0 ? sum + group.my_balance : sum), 0), [groups])
   const totalOwe = useMemo(() => groups.reduce((sum, group) => (group.my_balance < 0 ? sum + Math.abs(group.my_balance) : sum), 0), [groups])
+
+  // Show amber alert only when a debt owed-to-you is stale (last activity > 24h ago)
+  const staleOwedGroup = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    return groups.find((group) => group.my_balance > 0 && new Date(group.last_activity).getTime() < cutoff)
+  }, [groups])
+
   const firstGroupOwed = groups.find((group) => group.my_balance > 0)
 
   const handleCreateGroup = async () => {
@@ -160,20 +167,21 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {firstGroupOwed && (
+      {staleOwedGroup && (
         <div className="px-4 pt-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-2.5">
+          <div className="bg-amber-100 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-2.5">
             <span className="text-base">⏰</span>
             <div className="flex-1 min-w-0">
-              <p className="text-amber-800 text-xs font-medium leading-relaxed">
-                You are owed {formatMoney(totalOwed)} from {firstGroupOwed.name} in the last 24h.
+              <p className="text-amber-900 text-xs font-semibold leading-relaxed">
+                Overdue · You are owed {formatMoney(staleOwedGroup.my_balance, staleOwedGroup.base_currency)} from{' '}
+                <span className="font-bold">{staleOwedGroup.name}</span> for over 24h.
               </p>
             </div>
             <button
-              onClick={() => navigate(`/groups/${firstGroupOwed.id}`)}
-              className="text-amber-700 font-bold text-xs bg-amber-100 px-2.5 py-1.5 rounded-full flex-shrink-0"
+              onClick={() => navigate(`/groups/${staleOwedGroup.id}`)}
+              className="text-amber-800 font-bold text-xs bg-amber-200 px-2.5 py-1.5 rounded-full flex-shrink-0 active:scale-95 transition-transform"
             >
-              Remind
+              Nudge
             </button>
           </div>
         </div>

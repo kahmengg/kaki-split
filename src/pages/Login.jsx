@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 
@@ -8,7 +8,6 @@ const accentCardClass = 'bg-white/10 border-white/15 text-white'
 
 export default function Login() {
   const navigate = useNavigate()
-  const location = useLocation()
   const showToast = useToast()
   const { signIn, signUp, signInWithGoogle } = useAuth()
 
@@ -19,28 +18,20 @@ export default function Login() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const nextPath = typeof location.state?.from === 'string' ? location.state.from : '/dashboard'
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
 
     try {
       if (mode === 'signup') {
-        const result = await signUp({ email, password, name })
-        if (result?.session) {
-            showToast('Account created and signed in', 'success')
-            navigate(nextPath)
-
-        } else {
-          showToast('Account created. Check your email to verify before signing in.', 'success')
-          setMode('login')
-        }
+        await signUp({ email, password, name })
+        showToast('Account created! Check your email to confirm, then sign in.', 'success')
+        setMode('login')
+        setPassword('')
       } else {
-          await signIn({ email, password })
-          showToast('Signed in successfully', 'success')
-          navigate(nextPath)
-
+        await signIn({ email, password })
+        showToast('Signed in successfully', 'success')
+        navigate('/dashboard')
       }
     } catch (error) {
       showToast(error.message || 'Unable to authenticate right now', 'error')
@@ -49,13 +40,12 @@ export default function Login() {
     }
   }
 
-
   const handleGoogle = async () => {
     setLoading(true)
     try {
       await signInWithGoogle()
     } catch (error) {
-      showToast(error.message || 'Google sign-in failed', 'error')
+      showToast(error.message || 'Google sign-in failed. Please use email & password.', 'error')
       setLoading(false)
     }
   }
@@ -113,7 +103,6 @@ export default function Login() {
           aria-label={authExpanded ? 'Collapse login section' : 'Expand login section'}
         >
           <div className="w-12 h-1.5 rounded-full bg-gray-200 mb-3" />
-          <span className="text-xs font-semibold text-gray-500 mb-3">{authExpanded ? 'Hide login' : 'Tap to expand login'}</span>
         </button>
 
         {authExpanded ? (
@@ -136,7 +125,7 @@ export default function Login() {
             <button
               onClick={handleGoogle}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors font-semibold text-gray-700 text-sm mb-4"
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors font-semibold text-gray-700 text-sm"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

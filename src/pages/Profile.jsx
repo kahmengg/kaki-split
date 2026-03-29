@@ -15,7 +15,6 @@ export default function Profile() {
   const [name, setName] = useState('')
   const [paynow, setPaynow] = useState('')
   const [paylah, setPaylah] = useState('')
-  const [grabpay, setGrabpay] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -25,7 +24,6 @@ export default function Profile() {
     setName(profile.display_name || '')
     setPaynow(profile.paynow_number || '')
     setPaylah(profile.paylah_handle || '')
-    setGrabpay(profile.grabpay_handle || '')
     setAvatarUrl(profile.avatar_url || '')
   }, [profile])
 
@@ -51,7 +49,6 @@ export default function Profile() {
           display_name: name.trim() || user.email?.split('@')[0] || 'User',
           paynow_number: paynow.trim() || null,
           paylah_handle: paylah.trim() || null,
-          grabpay_handle: grabpay.trim() || null,
           avatar_url: avatarUrl || null,
         },
       })
@@ -185,19 +182,6 @@ export default function Profile() {
               />
             </div>
 
-            <div>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5">
-                <span className="w-5 h-5 bg-emerald-50 rounded-lg flex items-center justify-center text-sm">💳</span>
-                GrabPay handle
-              </label>
-              <input
-                type="text"
-                value={grabpay}
-                onChange={(event) => setGrabpay(event.target.value)}
-                placeholder="@username"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
-              />
-            </div>
           </div>
         </div>
 

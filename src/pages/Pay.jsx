@@ -128,7 +128,7 @@ export default function PayScreen() {
     if (payNowNumber) {
       navigator.clipboard?.writeText(payNowNumber).catch(() => {})
     }
-    showInlineToast('PayNow number copied! Opening PayLah…')
+    showInlineToast('PayNow number copied! Opening PayLah...')
     window.setTimeout(() => {
       window.location.href = 'dbspaylah://'
     }, 300)
@@ -274,7 +274,7 @@ export default function PayScreen() {
               style={{ boxShadow: '0 4px 16px rgba(16,185,129,0.35)' }}
             >
               <span>📋</span>
-              Copy PayNow &amp; Open PayLah
+              Copy PayNow &amp; Open PayLah!
             </button>
             <p className="text-center text-xs text-gray-400 mt-2">Copies {toUser.paynow_number} · opens PayLah app</p>
           </div>

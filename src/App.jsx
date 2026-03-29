@@ -1,5 +1,5 @@
 import React from 'react'
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
 import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
@@ -9,11 +9,9 @@ import PayScreen from './pages/Pay'
 import Insights from './pages/Insights'
 import TripSummary from './pages/TripSummary'
 import Profile from './pages/Profile'
-import JoinGroup from './pages/JoinGroup'
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
-  const location = useLocation()
 
   if (loading) {
     return (
@@ -27,8 +25,7 @@ function RequireAuth({ children }) {
   }
 
   if (!user) {
-    const from = `${location.pathname}${location.search}`
-    return <Navigate to="/login" state={{ from }} replace />
+    return <Navigate to="/login" replace />
   }
 
   return children
@@ -36,7 +33,6 @@ function RequireAuth({ children }) {
 
 function PublicOnly({ children }) {
   const { user, loading } = useAuth()
-  const location = useLocation()
 
   if (loading) {
     return (
@@ -47,8 +43,7 @@ function PublicOnly({ children }) {
   }
 
   if (user) {
-    const redirectPath = typeof location.state?.from === 'string' ? location.state.from : '/dashboard'
-    return <Navigate to={redirectPath} replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   return children
@@ -56,10 +51,9 @@ function PublicOnly({ children }) {
 
 export default function App() {
   return (
-      <ToastProvider>
-        <HashRouter>
-          <Routes>
-
+    <ToastProvider>
+      <BrowserRouter>
+        <Routes>
           <Route
             path="/login"
             element={
@@ -69,23 +63,14 @@ export default function App() {
             }
           />
 
-            <Route
-              path="/dashboard"
-              element={
-                <RequireAuth>
-                  <Dashboard />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/join/:inviteCode"
-              element={
-                <RequireAuth>
-                  <JoinGroup />
-                </RequireAuth>
-              }
-            />
-
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth>
+                <Dashboard />
+              </RequireAuth>
+            }
+          />
           <Route
             path="/groups/:id"
             element={
@@ -130,8 +115,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        </HashRouter>
-
+      </BrowserRouter>
     </ToastProvider>
   )
 }

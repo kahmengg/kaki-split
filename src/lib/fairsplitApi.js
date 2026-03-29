@@ -348,12 +348,12 @@ export async function addExpense({
   return expense
 }
 
-export async function createNudge({ groupId, fromUserId, toUserId, amount }) {
+export async function createNudge({ groupId, fromUserId, toUserId, amount, message }) {
   const { error } = await supabase.from('nudges').insert({
     group_id: groupId,
     from_user_id: fromUserId,
     to_user_id: toUserId,
-    message: `Reminder: ${round2(amount).toFixed(2)} is due`,
+    message: message || `Reminder: ${round2(amount).toFixed(2)} is due`,
   })
 
   if (error) throw error
