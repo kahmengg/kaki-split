@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 const AUTH_INIT_TIMEOUT_MS = 15000
 const PROFILE_LOAD_TIMEOUT_MS = 15000
+const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
 function withTimeout(promise, ms, errorMessage) {
   let timeoutId
@@ -131,11 +132,18 @@ export function AuthProvider({ children }) {
     }
   }, [loadProfile])
 
-  const signIn = useCallback(async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
-    return data
-  }, [])
+    const signIn = useCallback(async ({ email, password }) => {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+
+      const pendingInviteCode = localStorage.getItem(PENDING_INVITE_KEY)
+      if (pendingInviteCode && data?.user?.id) {
+        localStorage.setItem(PENDING_INVITE_KEY, String(pendingInviteCode).trim().toUpperCase())
+      }
+
+      return data
+    }, [])
+
 
   const signUp = useCallback(async ({ email, password, name }) => {
     const { data, error } = await supabase.auth.signUp({

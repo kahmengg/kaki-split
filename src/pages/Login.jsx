@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 
@@ -26,8 +26,17 @@ const productHighlights = [
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const showToast = useToast()
   const { signIn, signUp, signInWithGoogle } = useAuth()
+
+  const pendingInviteCode = useMemo(() => {
+    const fromQuery = new URLSearchParams(location.search).get('invite')
+    if (fromQuery) return String(fromQuery).trim().toUpperCase()
+
+    const fromStorage = localStorage.getItem('kakisplit:pendingInviteCode')
+    return fromStorage ? String(fromStorage).trim().toUpperCase() : ''
+  }, [location.search])
 
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -47,11 +56,16 @@ export default function Login() {
         showToast('Account created! Check your email to confirm, then sign in.', 'success')
         setMode('login')
         setPassword('')
-      } else {
-        await signIn({ email, password })
-        showToast('Signed in successfully', 'success')
-        navigate('/dashboard')
-      }
+        } else {
+          await signIn({ email, password })
+          showToast('Signed in successfully', 'success')
+          if (pendingInviteCode) {
+            navigate(`/join/${encodeURIComponent(pendingInviteCode)}`)
+          } else {
+            navigate('/dashboard')
+          }
+        }
+
     } catch (error) {
       showToast(error.message || 'Unable to authenticate right now', 'error')
     } finally {
@@ -104,10 +118,17 @@ export default function Login() {
             Keep trips fun.
             <span className="block text-emerald-300">Track every dollar fairly.</span>
           </h1>
-          <p className="text-sm text-slate-200 leading-6">
-            Built for roommates, travel squads, and kakis. Add expenses in seconds, auto-calculate balances,
-            and settle without awkward reminders.
-          </p>
+            <p className="text-sm text-slate-200 leading-6">
+              Built for roommates, travel squads, and kakis. Add expenses in seconds, auto-calculate balances,
+              and settle without awkward reminders.
+            </p>
+            {pendingInviteCode && (
+              <div className="rounded-2xl border border-emerald-200/60 bg-emerald-300/10 px-3 py-2">
+                <p className="text-xs text-emerald-100 font-semibold">You were invited to a group</p>
+                <p className="text-[11px] text-emerald-200 mt-0.5">Sign in and we will join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
+              </div>
+            )}
+
 
           <div className="grid grid-cols-3 gap-2.5">
             {socialProof.map((item) => (

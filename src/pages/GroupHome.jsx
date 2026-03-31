@@ -461,7 +461,8 @@ export default function GroupHome() {
 
   const handleShareInvite = async () => {
     try {
-      await navigator.clipboard.writeText(`kakisplit.app/join/${group.invite_code}`)
+      const origin = window.location.origin
+      await navigator.clipboard.writeText(`${origin}/join/${group.invite_code}`)
       showToast('Invite link copied!', 'success')
     } catch {
       showToast('Unable to copy link', 'error')

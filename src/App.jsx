@@ -10,6 +10,7 @@ import Insights from './pages/Insights'
 import TripSummary from './pages/TripSummary'
 import Activity from './pages/Activity'
 import Profile from './pages/Profile'
+import JoinInvite from './pages/JoinInvite'
 
 function RequireAuth({ children }) {
   const { user, loading, session } = useAuth()
@@ -71,14 +72,16 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/dashboard"
-            element={
-              <RequireAuth>
-                <Dashboard />
-              </RequireAuth>
-            }
-          />
+            <Route
+              path="/dashboard"
+              element={
+                <RequireAuth>
+                  <Dashboard />
+                </RequireAuth>
+              }
+            />
+            <Route path="/join/:inviteCode" element={<JoinInvite />} />
+
           <Route
             path="/groups/:id"
             element={

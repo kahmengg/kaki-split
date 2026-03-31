@@ -319,6 +319,34 @@ export async function createGroup({ userId, name, baseCurrency = 'SGD' }) {
   return group
 }
 
+export async function joinGroupByInviteCode({ inviteCode, userId }) {
+  const normalizedCode = String(inviteCode || '').trim().toUpperCase()
+  if (!normalizedCode) throw new Error('Invite code is missing')
+  if (!userId) throw new Error('Please sign in to join this group')
+
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select('id,name,invite_code')
+    .eq('invite_code', normalizedCode)
+    .maybeSingle()
+
+  if (groupError) throw groupError
+  if (!group) throw new Error('Invalid invite code')
+
+  const { error: membershipError } = await supabase.from('group_members').upsert(
+    {
+      group_id: group.id,
+      user_id: userId,
+      role: 'member',
+    },
+    { onConflict: 'group_id,user_id', ignoreDuplicates: true }
+  )
+
+  if (membershipError) throw membershipError
+
+  return group
+}
+
 export async function deleteGroup({ groupId, userId }) {
   const { data, error } = await supabase
     .from('groups')
