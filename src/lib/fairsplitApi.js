@@ -54,6 +54,23 @@ function formatTelegramCode(code) {
   return normalized.split('').join(' ')
 }
 
+function toTelegramRlsError(error) {
+  if (!error) return null
+  const code = String(error.code || '')
+  const message = String(error.message || '')
+  const details = String(error.details || '')
+  const hint = String(error.hint || '')
+  const combined = `${message} ${details} ${hint}`.toLowerCase()
+
+  if (code === '42501' || combined.includes('row-level security') || combined.includes('rls')) {
+    return new Error(
+      'Telegram setup is blocked by Supabase RLS policies. Run the Telegram policy SQL in Supabase SQL Editor, then try generating the link code again.'
+    )
+  }
+
+  return null
+}
+
 function toDateInTimezone(date, timezone) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone || 'UTC',
@@ -344,7 +361,9 @@ export async function createTelegramLinkToken({ groupId, createdBy }) {
     .is('used_at', null)
     .gt('expires_at', now.toISOString())
 
-  if (expireError) throw expireError
+  if (expireError) {
+    throw toTelegramRlsError(expireError) || expireError
+  }
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const token = generateInviteCode(TELEGRAM_LINK_TOKEN_LENGTH)
@@ -368,9 +387,10 @@ export async function createTelegramLinkToken({ groupId, createdBy }) {
       }
     }
 
-    if (error?.code !== '23505') {
-      throw error
-    }
+      if (error?.code !== '23505') {
+        throw toTelegramRlsError(error) || error
+      }
+
   }
 
   throw new Error('Unable to generate Telegram link code. Please try again.')
@@ -704,7 +724,9 @@ export async function fetchGroupData({ groupId, userId = null }) {
     .eq('group_id', groupId)
     .maybeSingle()
 
-  if (telegramError) throw telegramError
+  const telegramErrorCode = String(telegramError?.code || '')
+  const canSkipTelegramState = telegramErrorCode === '42P01' || telegramErrorCode === '42501'
+  if (telegramError && !canSkipTelegramState) throw telegramError
 
   const { data: expenses, error: expensesError } = await supabase
     .from('expenses')
