@@ -322,6 +322,18 @@ export async function deleteGroup({ groupId, userId }) {
 export async function createTelegramLinkToken({ groupId, createdBy }) {
   if (!groupId || !createdBy) throw new Error('Group and user are required')
 
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select('created_by')
+    .eq('id', groupId)
+    .maybeSingle()
+
+  if (groupError) throw groupError
+  if (!group) throw new Error('Group not found')
+  if (group.created_by !== createdBy) {
+    throw new Error('Only the group owner can generate Telegram link codes')
+  }
+
   const now = new Date()
   const expiresAt = new Date(now.getTime() + TELEGRAM_LINK_TOKEN_TTL_MINUTES * 60 * 1000).toISOString()
 

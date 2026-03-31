@@ -155,6 +155,7 @@ function ConnectTelegramSheet({
   isOpen,
   onClose,
   groupName,
+  isOwner,
   isConnected,
   telegramGroupName,
   isConnecting,
@@ -199,42 +200,51 @@ function ConnectTelegramSheet({
               Disconnect Telegram
             </button>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600 leading-relaxed">Get expense updates and debt reminders in your group chat.</p>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 leading-relaxed">Get expense updates and debt reminders in your group chat.</p>
 
-            <div className="space-y-3 text-sm text-gray-700">
-              <p>
-                <span className="font-semibold">1.</span> Add <span className="font-semibold">@kaki_split</span> to your Telegram group
-              </p>
-              <div>
-                <p className="mb-2">
-                  <span className="font-semibold">2.</span> Send this command in the group:
-                </p>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-5 text-center">
-                  <span className="font-mono font-black text-xl tracking-wide text-emerald-700">/link {code || '------'}</span>
+              {!isOwner ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-amber-900">Only the group owner can generate a Telegram link code.</p>
+                  <p className="mt-1 text-xs text-amber-700">Ask the owner to open this sheet and share the /link command.</p>
                 </div>
-                {expiresAtLabel && <p className="mt-2 text-xs text-gray-500">Code expires at {expiresAtLabel}</p>}
+              ) : (
+                <>
+                  <div className="space-y-3 text-sm text-gray-700">
+                    <p>
+                      <span className="font-semibold">1.</span> Add <span className="font-semibold">@kaki_split</span> to your Telegram group
+                    </p>
+                    <div>
+                      <p className="mb-2">
+                        <span className="font-semibold">2.</span> Send this command in the group:
+                      </p>
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-5 text-center">
+                        <span className="font-mono font-black text-xl tracking-wide text-emerald-700">/link {code || '------'}</span>
+                      </div>
+                      {expiresAtLabel && <p className="mt-2 text-xs text-gray-500">Code expires at {expiresAtLabel}</p>}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform">
+                      {copied ? 'Copied!' : 'Copy command'}
+                    </button>
+                    <button onClick={onRefreshCode} className="px-4 py-2.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
+                      Refresh code
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className="text-sm text-gray-500 flex items-center gap-2">
+                <span>Waiting for connection...</span>
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform">
-                {copied ? 'Copied!' : 'Copy command'}
-              </button>
-              <button onClick={onRefreshCode} className="px-4 py-2.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
-                Refresh code
-              </button>
+              {isConnecting && <p className="text-xs text-gray-400">Listening for @kaki_split confirmation...</p>}
             </div>
-
-            <div className="text-sm text-gray-500 flex items-center gap-2">
-              <span>Waiting for connection...</span>
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            </div>
-
-            {isConnecting && <p className="text-xs text-gray-400">Listening for @kaki_split confirmation...</p>}
-          </div>
-        )}
+          )}
       </div>
     </BottomSheet>
   )
@@ -327,8 +337,14 @@ export default function GroupHome() {
     if (!showTelegramSheet || telegramConnected || !group || !user?.id) return
 
     let cancelled = false
+    const isOwner = group.created_by === user.id
 
     const ensureToken = async () => {
+      if (!isOwner) {
+        setIsTelegramConnecting(false)
+        return
+      }
+
       setIsTelegramConnecting(true)
       try {
         const existing = await fetchTelegramLinkToken({ groupId: group.id })
@@ -454,6 +470,11 @@ export default function GroupHome() {
 
   const handleRefreshTelegramCode = async () => {
     if (!group?.id || !user?.id) return
+    if (group.created_by !== user.id) {
+      showToast('Only the group owner can generate Telegram link codes', 'error')
+      return
+    }
+
     try {
       setIsTelegramConnecting(true)
       const tokenData = await createTelegramLinkToken({ groupId: group.id, createdBy: user.id })
@@ -708,22 +729,23 @@ export default function GroupHome() {
           </BottomSheet>
 
 
-        <ConnectTelegramSheet
-          isOpen={showTelegramSheet}
-          onClose={() => setShowTelegramSheet(false)}
-          groupName={group.name}
-          isConnected={telegramConnected}
-          telegramGroupName={telegramGroupName}
-          isConnecting={isTelegramConnecting}
-          code={telegramCodeDisplay}
-          codeExpiresAt={telegramCodeExpiresAt}
-          onCopy={handleCopyTelegramCode}
-          copied={telegramCodeCopied}
-          onDisconnect={handleDisconnectTelegram}
-          settings={telegramSettings}
-          onToggleSetting={handleToggleTelegramSetting}
-          onRefreshCode={handleRefreshTelegramCode}
-        />
+          <ConnectTelegramSheet
+            isOpen={showTelegramSheet}
+            onClose={() => setShowTelegramSheet(false)}
+            groupName={group.name}
+            isOwner={isOwner}
+            isConnected={telegramConnected}
+            telegramGroupName={telegramGroupName}
+            isConnecting={isTelegramConnecting}
+            code={telegramCodeDisplay}
+            codeExpiresAt={telegramCodeExpiresAt}
+            onCopy={handleCopyTelegramCode}
+            copied={telegramCodeCopied}
+            onDisconnect={handleDisconnectTelegram}
+            settings={telegramSettings}
+            onToggleSetting={handleToggleTelegramSetting}
+            onRefreshCode={handleRefreshTelegramCode}
+          />
 
 
       <NudgeSheet
