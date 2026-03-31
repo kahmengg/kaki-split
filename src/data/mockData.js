@@ -1,4 +1,4 @@
-// Mock data for FairSplit frontend prototype
+// Mock data for KakiSplit frontend prototype
 
 export const CURRENT_USER = {
   id: 'user-1',

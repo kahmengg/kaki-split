@@ -85,6 +85,48 @@ create table if not exists public.activity_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.telegram_connections (
+  group_id uuid primary key references public.groups(id) on delete cascade,
+  telegram_chat_id bigint not null unique,
+  telegram_group_name text,
+  linked_by uuid references public.profiles(id) on delete set null,
+  linked_at timestamptz not null default now(),
+  is_active boolean not null default true,
+  expense_alerts_enabled boolean not null default true,
+  payment_alerts_enabled boolean not null default true,
+  daily_reminder_enabled boolean not null default true,
+  reminder_hour smallint not null default 0,
+  reminder_minute smallint not null default 0,
+  reminder_timezone text not null default 'Asia/Singapore',
+  last_daily_reminder_date date
+);
+
+create table if not exists public.telegram_link_tokens (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups(id) on delete cascade,
+  token text not null unique,
+  created_by uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  used_chat_id bigint,
+  used_chat_title text
+);
+
+create table if not exists public.telegram_outbox (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups(id) on delete cascade,
+  event_type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending',
+  attempts integer not null default 0,
+  error_message text,
+  available_at timestamptz not null default now(),
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint telegram_outbox_status_check check (status in ('pending', 'sent', 'failed'))
+);
+
 create index if not exists idx_group_members_user_id on public.group_members(user_id);
 create index if not exists idx_expenses_group_id on public.expenses(group_id);
 create index if not exists idx_expenses_created_at on public.expenses(created_at desc);
@@ -92,6 +134,10 @@ create index if not exists idx_expense_splits_expense_id on public.expense_split
 create index if not exists idx_payments_group_id on public.payments(group_id);
 create index if not exists idx_nudges_group_to on public.nudges(group_id, to_user_id);
 create index if not exists idx_activity_events_group_created on public.activity_events(group_id, created_at desc);
+create index if not exists idx_telegram_link_tokens_group on public.telegram_link_tokens(group_id);
+create index if not exists idx_telegram_link_tokens_token on public.telegram_link_tokens(token);
+create index if not exists idx_telegram_outbox_status_available on public.telegram_outbox(status, available_at);
+create index if not exists idx_telegram_connections_active on public.telegram_connections(is_active);
 
 create or replace function public.set_profile_updated_at()
 returns trigger
@@ -134,3 +180,409 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row
 execute function public.handle_new_auth_user();
+
+alter table public.profiles enable row level security;
+alter table public.groups enable row level security;
+alter table public.group_members enable row level security;
+alter table public.expenses enable row level security;
+alter table public.expense_splits enable row level security;
+alter table public.payments enable row level security;
+alter table public.nudges enable row level security;
+alter table public.activity_events enable row level security;
+alter table public.telegram_connections enable row level security;
+alter table public.telegram_link_tokens enable row level security;
+alter table public.telegram_outbox enable row level security;
+
+create or replace function public.is_group_member(_group_id uuid, _user_id uuid default auth.uid())
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.group_members gm
+    where gm.group_id = _group_id
+      and gm.user_id = _user_id
+  );
+$$;
+
+create or replace function public.is_group_owner(_group_id uuid, _user_id uuid default auth.uid())
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.groups g
+    where g.id = _group_id
+      and g.created_by = _user_id
+  );
+$$;
+
+revoke all on function public.is_group_member(uuid, uuid) from public;
+revoke all on function public.is_group_owner(uuid, uuid) from public;
+grant execute on function public.is_group_member(uuid, uuid) to authenticated;
+grant execute on function public.is_group_owner(uuid, uuid) to authenticated;
+
+drop policy if exists "profiles_select_own" on public.profiles;
+create policy "profiles_select_own"
+on public.profiles for select
+to authenticated
+using (id = auth.uid());
+
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
+on public.profiles for insert
+to authenticated
+with check (id = auth.uid());
+
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
+on public.profiles for update
+to authenticated
+using (id = auth.uid())
+with check (id = auth.uid());
+
+drop policy if exists "groups_select_member" on public.groups;
+create policy "groups_select_member"
+on public.groups for select
+to authenticated
+using (
+  created_by = auth.uid()
+  or public.is_group_member(id, auth.uid())
+);
+
+drop policy if exists "groups_insert_creator" on public.groups;
+create policy "groups_insert_creator"
+on public.groups for insert
+to authenticated
+with check (created_by = auth.uid());
+
+drop policy if exists "groups_update_owner" on public.groups;
+create policy "groups_update_owner"
+on public.groups for update
+to authenticated
+using (created_by = auth.uid())
+with check (created_by = auth.uid());
+
+drop policy if exists "groups_delete_owner" on public.groups;
+create policy "groups_delete_owner"
+on public.groups for delete
+to authenticated
+using (created_by = auth.uid());
+
+drop policy if exists "group_members_select_self_or_group_owner" on public.group_members;
+create policy "group_members_select_self_or_group_owner"
+on public.group_members for select
+to authenticated
+using (
+  user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "group_members_insert_self_or_group_owner" on public.group_members;
+create policy "group_members_insert_self_or_group_owner"
+on public.group_members for insert
+to authenticated
+with check (
+  user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "group_members_update_self_or_group_owner" on public.group_members;
+create policy "group_members_update_self_or_group_owner"
+on public.group_members for update
+to authenticated
+using (
+  user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+)
+with check (
+  user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "group_members_delete_self_or_group_owner" on public.group_members;
+create policy "group_members_delete_self_or_group_owner"
+on public.group_members for delete
+to authenticated
+using (
+  user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "expenses_select_group_member" on public.expenses;
+create policy "expenses_select_group_member"
+on public.expenses for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "expenses_insert_group_member_creator" on public.expenses;
+create policy "expenses_insert_group_member_creator"
+on public.expenses for insert
+to authenticated
+with check (
+  created_by = auth.uid()
+  and public.is_group_member(group_id, auth.uid())
+);
+
+drop policy if exists "expenses_update_creator" on public.expenses;
+create policy "expenses_update_creator"
+on public.expenses for update
+to authenticated
+using (created_by = auth.uid())
+with check (created_by = auth.uid());
+
+drop policy if exists "expenses_delete_creator_or_group_owner" on public.expenses;
+drop policy if exists "expenses_delete_creator" on public.expenses;
+create policy "expenses_delete_creator_or_group_owner"
+on public.expenses for delete
+to authenticated
+using (
+  created_by = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "expense_splits_select_group_member" on public.expense_splits;
+create policy "expense_splits_select_group_member"
+on public.expense_splits for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.expenses e
+    where e.id = expense_splits.expense_id
+      and public.is_group_member(e.group_id, auth.uid())
+  )
+);
+
+drop policy if exists "expense_splits_insert_expense_creator" on public.expense_splits;
+create policy "expense_splits_insert_expense_creator"
+on public.expense_splits for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.expenses e
+    where e.id = expense_splits.expense_id
+      and e.created_by = auth.uid()
+  )
+);
+
+drop policy if exists "expense_splits_update_expense_creator" on public.expense_splits;
+create policy "expense_splits_update_expense_creator"
+on public.expense_splits for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.expenses e
+    where e.id = expense_splits.expense_id
+      and e.created_by = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.expenses e
+    where e.id = expense_splits.expense_id
+      and e.created_by = auth.uid()
+  )
+);
+
+drop policy if exists "expense_splits_delete_expense_creator" on public.expense_splits;
+create policy "expense_splits_delete_expense_creator"
+on public.expense_splits for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.expenses e
+    where e.id = expense_splits.expense_id
+      and e.created_by = auth.uid()
+  )
+);
+
+drop policy if exists "payments_select_group_member" on public.payments;
+create policy "payments_select_group_member"
+on public.payments for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "payments_insert_group_member_creator" on public.payments;
+create policy "payments_insert_group_member_creator"
+on public.payments for insert
+to authenticated
+with check (
+  created_by = auth.uid()
+  and public.is_group_member(group_id, auth.uid())
+);
+
+drop policy if exists "payments_update_creator" on public.payments;
+create policy "payments_update_creator"
+on public.payments for update
+to authenticated
+using (created_by = auth.uid())
+with check (created_by = auth.uid());
+
+drop policy if exists "payments_delete_creator_or_group_owner" on public.payments;
+drop policy if exists "payments_delete_creator" on public.payments;
+create policy "payments_delete_creator_or_group_owner"
+on public.payments for delete
+to authenticated
+using (
+  created_by = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "nudges_select_group_member" on public.nudges;
+create policy "nudges_select_group_member"
+on public.nudges for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "nudges_insert_group_member_sender" on public.nudges;
+create policy "nudges_insert_group_member_sender"
+on public.nudges for insert
+to authenticated
+with check (
+  from_user_id = auth.uid()
+  and public.is_group_member(group_id, auth.uid())
+);
+
+drop policy if exists "nudges_delete_sender_or_group_owner" on public.nudges;
+drop policy if exists "nudges_delete_sender" on public.nudges;
+create policy "nudges_delete_sender_or_group_owner"
+on public.nudges for delete
+to authenticated
+using (
+  from_user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "activity_events_select_group_member" on public.activity_events;
+create policy "activity_events_select_group_member"
+on public.activity_events for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "activity_events_insert_group_member_actor" on public.activity_events;
+create policy "activity_events_insert_group_member_actor"
+on public.activity_events for insert
+to authenticated
+with check (
+  actor_user_id = auth.uid()
+  and public.is_group_member(group_id, auth.uid())
+);
+
+drop policy if exists "activity_events_delete_actor_or_group_owner" on public.activity_events;
+create policy "activity_events_delete_actor_or_group_owner"
+on public.activity_events for delete
+to authenticated
+using (
+  actor_user_id = auth.uid()
+  or public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "telegram_connections_select_group_member" on public.telegram_connections;
+create policy "telegram_connections_select_group_member"
+on public.telegram_connections for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "telegram_connections_upsert_group_owner" on public.telegram_connections;
+create policy "telegram_connections_upsert_group_owner"
+on public.telegram_connections for all
+to authenticated
+using (public.is_group_owner(group_id, auth.uid()))
+with check (public.is_group_owner(group_id, auth.uid()));
+
+drop policy if exists "telegram_link_tokens_select_group_member" on public.telegram_link_tokens;
+create policy "telegram_link_tokens_select_group_member"
+on public.telegram_link_tokens for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "telegram_link_tokens_insert_group_owner" on public.telegram_link_tokens;
+create policy "telegram_link_tokens_insert_group_owner"
+on public.telegram_link_tokens for insert
+to authenticated
+with check (
+  created_by = auth.uid()
+  and public.is_group_owner(group_id, auth.uid())
+);
+
+drop policy if exists "telegram_link_tokens_update_group_owner" on public.telegram_link_tokens;
+create policy "telegram_link_tokens_update_group_owner"
+on public.telegram_link_tokens for update
+to authenticated
+using (public.is_group_owner(group_id, auth.uid()))
+with check (public.is_group_owner(group_id, auth.uid()));
+
+drop policy if exists "telegram_outbox_select_group_member" on public.telegram_outbox;
+create policy "telegram_outbox_select_group_member"
+on public.telegram_outbox for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "telegram_outbox_insert_group_member" on public.telegram_outbox;
+create policy "telegram_outbox_insert_group_member"
+on public.telegram_outbox for insert
+to authenticated
+with check (public.is_group_member(group_id, auth.uid()));
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars',
+  'avatars',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+alter table storage.objects enable row level security;
+
+drop policy if exists "avatars_public_read" on storage.objects;
+create policy "avatars_public_read"
+on storage.objects for select
+to public
+using (bucket_id = 'avatars');
+
+drop policy if exists "avatars_upload_own_folder" on storage.objects;
+create policy "avatars_upload_own_folder"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "avatars_update_own_folder" on storage.objects;
+create policy "avatars_update_own_folder"
+on storage.objects for update
+to authenticated
+using (
+  bucket_id = 'avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "avatars_delete_own_folder" on storage.objects;
+create policy "avatars_delete_own_folder"
+on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'avatars'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);

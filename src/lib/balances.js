@@ -10,9 +10,16 @@ export function computeNetBalances({ memberIds, expenses, splitsByExpenseId, pay
     net.set(expense.paid_by, round2((net.get(expense.paid_by) || 0) + amount))
 
     const splits = splitsByExpenseId.get(expense.id) || []
+    const uniqueSplitsByUser = new Map()
+
     for (const split of splits) {
-      const share = Number(split.amount || 0)
-      net.set(split.user_id, round2((net.get(split.user_id) || 0) - share))
+      if (!uniqueSplitsByUser.has(split.user_id)) {
+        uniqueSplitsByUser.set(split.user_id, Number(split.amount || 0))
+      }
+    }
+
+    for (const [splitUserId, share] of uniqueSplitsByUser.entries()) {
+      net.set(splitUserId, round2((net.get(splitUserId) || 0) - share))
     }
   }
 

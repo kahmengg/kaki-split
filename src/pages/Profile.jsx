@@ -4,7 +4,7 @@ import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { saveProfile, uploadAvatar } from '../lib/fairsplitApi'
+import { removeAvatar, saveProfile, uploadAvatar } from '../lib/fairsplitApi'
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -18,6 +18,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [removingAvatar, setRemovingAvatar] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -82,6 +83,28 @@ export default function Profile() {
     }
   }
 
+  const handleRemoveAvatar = async () => {
+    if (!user?.id || !avatarUrl) return
+
+    setRemovingAvatar(true)
+    try {
+      await removeAvatar({ avatarUrl })
+      setAvatarUrl('')
+      await saveProfile({
+        userId: user.id,
+        profile: {
+          avatar_url: null,
+        },
+      })
+      await refreshProfile()
+      showToast('Profile photo removed', 'success')
+    } catch (error) {
+      showToast(error.message || 'Unable to remove profile photo', 'error')
+    } finally {
+      setRemovingAvatar(false)
+    }
+  }
+
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -114,9 +137,25 @@ export default function Profile() {
           <div>
             <h2 className="font-bold text-gray-900 text-lg">{name || profile?.display_name || 'User'}</h2>
             <p className="text-gray-500 text-sm">{user?.email}</p>
-            <button onClick={handleAvatarPick} className="text-xs font-semibold text-emerald-600 mt-1">
-              {uploading ? 'Uploading...' : 'Edit photo'}
-            </button>
+              <div className="flex items-center gap-3 mt-1">
+                <button
+                  onClick={handleAvatarPick}
+                  disabled={uploading || removingAvatar}
+                  className="text-xs font-semibold text-emerald-600 disabled:opacity-60"
+                >
+                  {uploading ? 'Uploading...' : 'Edit photo'}
+                </button>
+                {avatarUrl ? (
+                  <button
+                    onClick={handleRemoveAvatar}
+                    disabled={uploading || removingAvatar}
+                    className="text-xs font-semibold text-red-500 disabled:opacity-60"
+                  >
+                    {removingAvatar ? 'Removing...' : 'Remove photo'}
+                  </button>
+                ) : null}
+              </div>
+
           </div>
         </div>
       </div>
@@ -205,7 +244,7 @@ export default function Profile() {
           </button>
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">FairSplit v1.0</p>
+        <p className="text-center text-xs text-gray-300 pb-2">KakiSplit v1.0</p>
       </div>
 
       <BottomNav onFABPress={() => navigate('/dashboard')} />

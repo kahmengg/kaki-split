@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
@@ -6,7 +6,16 @@ import BottomSheet from '../components/BottomSheet'
 import QuickSplit from './QuickSplit'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { addExpense, createNudge, fetchGroupData } from '../lib/fairsplitApi'
+import {
+  addExpense,
+  createNudge,
+  createTelegramLinkToken,
+  deleteGroup,
+  disconnectTelegramConnection,
+  fetchGroupData,
+  fetchTelegramLinkToken,
+  updateTelegramSettings,
+} from '../lib/fairsplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 
 const NUDGE_PRESETS = [
@@ -150,10 +159,16 @@ function ConnectTelegramSheet({
   telegramGroupName,
   isConnecting,
   code,
+  codeExpiresAt,
   onCopy,
   copied,
   onDisconnect,
+  settings,
+  onToggleSetting,
+  onRefreshCode,
 }) {
+  const expiresAtLabel = codeExpiresAt ? new Date(codeExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Connect Telegram">
       <div className="px-5 py-4 pb-8">
@@ -164,6 +179,22 @@ function ConnectTelegramSheet({
               <p className="text-emerald-800 font-semibold text-sm">✅ Connected to {telegramGroupName}</p>
               <p className="text-emerald-700 text-xs mt-1">Notifications are active for {groupName}.</p>
             </div>
+
+            <div className="space-y-2 rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Expense alerts</span>
+                <input type="checkbox" checked={Boolean(settings?.expense_alerts_enabled)} onChange={(e) => onToggleSetting('expense_alerts_enabled', e.target.checked)} />
+              </label>
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Payment alerts</span>
+                <input type="checkbox" checked={Boolean(settings?.payment_alerts_enabled)} onChange={(e) => onToggleSetting('payment_alerts_enabled', e.target.checked)} />
+              </label>
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Daily reminders (12:00 AM)</span>
+                <input type="checkbox" checked={Boolean(settings?.daily_reminder_enabled)} onChange={(e) => onToggleSetting('daily_reminder_enabled', e.target.checked)} />
+              </label>
+            </div>
+
             <button onClick={onDisconnect} className="w-full py-3.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
               Disconnect Telegram
             </button>
@@ -174,28 +205,34 @@ function ConnectTelegramSheet({
 
             <div className="space-y-3 text-sm text-gray-700">
               <p>
-                <span className="font-semibold">1.</span> Add <span className="font-semibold">@FairSplitBot</span> to your Telegram group
+                <span className="font-semibold">1.</span> Add <span className="font-semibold">@kaki_split</span> to your Telegram group
               </p>
               <div>
                 <p className="mb-2">
-                  <span className="font-semibold">2.</span> Send this code in the chat:
+                  <span className="font-semibold">2.</span> Send this command in the group:
                 </p>
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-5 text-center">
-                  <span className="font-mono font-black text-3xl tracking-[0.3em] text-emerald-700">{code}</span>
+                  <span className="font-mono font-black text-xl tracking-wide text-emerald-700">/link {code || '------'}</span>
                 </div>
+                {expiresAtLabel && <p className="mt-2 text-xs text-gray-500">Code expires at {expiresAtLabel}</p>}
               </div>
             </div>
 
-            <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform">
-              {copied ? 'Copied!' : 'Copy code'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform">
+                {copied ? 'Copied!' : 'Copy command'}
+              </button>
+              <button onClick={onRefreshCode} className="px-4 py-2.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
+                Refresh code
+              </button>
+            </div>
 
             <div className="text-sm text-gray-500 flex items-center gap-2">
               <span>Waiting for connection...</span>
               <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             </div>
 
-            {isConnecting && <p className="text-xs text-gray-400">Listening for @FairSplitBot confirmation...</p>}
+            {isConnecting && <p className="text-xs text-gray-400">Listening for @kaki_split confirmation...</p>}
           </div>
         )}
       </div>
@@ -221,32 +258,59 @@ export default function GroupHome() {
   const [showTelegramSheet, setShowTelegramSheet] = useState(false)
   const [showReminderBanner, setShowReminderBanner] = useState(true)
   const [nudgeBalance, setNudgeBalance] = useState(null)
+  const [deletingGroup, setDeletingGroup] = useState(false)
+  const addExpenseInFlightRef = useRef(false)
 
   const [telegramConnected, setTelegramConnected] = useState(false)
   const [telegramGroupName, setTelegramGroupName] = useState(null)
   const [isTelegramConnecting, setIsTelegramConnecting] = useState(false)
   const [telegramCodeCopied, setTelegramCodeCopied] = useState(false)
-
-  const telegramCode = useMemo(() => (group?.invite_code || 'BALI42').slice(0, 6).toUpperCase(), [group?.invite_code])
+  const [telegramCode, setTelegramCode] = useState('')
+  const [telegramCodeDisplay, setTelegramCodeDisplay] = useState('')
+  const [telegramCodeExpiresAt, setTelegramCodeExpiresAt] = useState(null)
+  const [telegramSettings, setTelegramSettings] = useState({
+    expense_alerts_enabled: true,
+    payment_alerts_enabled: true,
+    daily_reminder_enabled: true,
+  })
 
   const loadGroup = async () => {
     if (!id || !user?.id) return
 
     setLoading(true)
     try {
-      const data = await fetchGroupData({ groupId: id, userId: user.id })
-      if (!data) {
-        setGroup(null)
-        return
-      }
+        const data = await fetchGroupData({ groupId: id, userId: user.id })
+        if (!data) {
+          if (localStorage.getItem('kakisplit:lastGroupId') === id) {
+            localStorage.removeItem('kakisplit:lastGroupId')
+          }
+          showToast('This group is no longer available', 'error')
+          navigate('/dashboard', { replace: true })
+          return
+        }
 
-      setGroup(data.group)
-      setMembers(data.members)
-      setUsersById(data.usersById)
-      setExpenses(data.expenses)
-      setBalances(data.smartBalances)
-      setTelegramConnected(Boolean(data.group.telegram_connected))
-      setTelegramGroupName(data.group.telegram_group_name || null)
+
+        setGroup(data.group)
+        setMembers(data.members)
+        setUsersById(data.usersById)
+        setExpenses(data.expenses)
+        setBalances(data.smartBalances)
+        setTelegramConnected(Boolean(data.group.telegram_connected))
+        setTelegramGroupName(data.group.telegram_group_name || null)
+        if (data.group.telegram_settings) {
+          setTelegramSettings({
+            expense_alerts_enabled: Boolean(data.group.telegram_settings.expense_alerts_enabled),
+            payment_alerts_enabled: Boolean(data.group.telegram_settings.payment_alerts_enabled),
+            daily_reminder_enabled: Boolean(data.group.telegram_settings.daily_reminder_enabled),
+          })
+        } else {
+          setTelegramSettings({
+            expense_alerts_enabled: true,
+            payment_alerts_enabled: true,
+            daily_reminder_enabled: true,
+          })
+        }
+
     } catch (error) {
       showToast(error.message || 'Failed to load group', 'error')
     } finally {
@@ -260,17 +324,55 @@ export default function GroupHome() {
   }, [id, user?.id])
 
   useEffect(() => {
-    if (!showTelegramSheet || telegramConnected || !group) return
+    if (!showTelegramSheet || telegramConnected || !group || !user?.id) return
 
-    setIsTelegramConnecting(true)
-    const timer = window.setTimeout(() => {
-      setTelegramConnected(true)
-      setTelegramGroupName(group.telegram_group_name || `${group.name} chat`)
-      setIsTelegramConnecting(false)
-    }, 3000)
+    let cancelled = false
 
-    return () => window.clearTimeout(timer)
-  }, [showTelegramSheet, telegramConnected, group])
+    const ensureToken = async () => {
+      setIsTelegramConnecting(true)
+      try {
+        const existing = await fetchTelegramLinkToken({ groupId: group.id })
+        const tokenData = existing || (await createTelegramLinkToken({ groupId: group.id, createdBy: user.id }))
+        if (!cancelled) {
+          setTelegramCode(tokenData.token || '')
+          setTelegramCodeDisplay(tokenData.token || tokenData.formattedToken || '')
+          setTelegramCodeExpiresAt(tokenData.expiresAt || null)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error.message || 'Unable to generate Telegram link code', 'error')
+        }
+      } finally {
+        if (!cancelled) setIsTelegramConnecting(false)
+      }
+    }
+
+    ensureToken()
+
+    const interval = window.setInterval(async () => {
+      try {
+        const data = await fetchGroupData({ groupId: group.id, userId: user.id })
+        if (!cancelled && data?.group?.telegram_connected) {
+          setTelegramConnected(true)
+          setTelegramGroupName(data.group.telegram_group_name || null)
+          if (data.group.telegram_settings) {
+            setTelegramSettings({
+              expense_alerts_enabled: Boolean(data.group.telegram_settings.expense_alerts_enabled),
+              payment_alerts_enabled: Boolean(data.group.telegram_settings.payment_alerts_enabled),
+              daily_reminder_enabled: Boolean(data.group.telegram_settings.daily_reminder_enabled),
+            })
+          }
+        }
+      } catch {
+        // ignore polling errors in sheet
+      }
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [showTelegramSheet, telegramConnected, group, user?.id, showToast])
 
   if (loading) {
     return (
@@ -291,6 +393,7 @@ export default function GroupHome() {
   const myBalances = balances.filter((balance) => balance.from === user.id || balance.to === user.id)
   const allSettled = myBalances.length === 0
   const debtReminder = balances.find((balance) => balance.from === user.id)
+  const isOwner = group.created_by === user.id
 
   const handlePay = (balance) => {
     navigate(`/groups/${id}/pay?from=${balance.from}&to=${balance.to}&amount=${balance.amount}`)
@@ -313,6 +416,9 @@ export default function GroupHome() {
   }
 
   const handleAddExpense = async (payload) => {
+    if (addExpenseInFlightRef.current) return
+    addExpenseInFlightRef.current = true
+
     try {
       await addExpense({
         groupId: id,
@@ -321,31 +427,56 @@ export default function GroupHome() {
         category: payload.category,
         paidBy: payload.paid_by,
         splitMembers: payload.split_members,
-        splitType: payload.split_type,
-        currency: payload.currency,
-        createdBy: user.id,
-      })
+          splitType: payload.split_type,
+          splitValues: payload.split_values,
+          currency: payload.currency,
+          createdBy: user.id,
+        })
 
       setShowQuickSplit(false)
       showToast('Expense added!', 'success')
       await loadGroup()
     } catch (error) {
       showToast(error.message || 'Unable to add expense', 'error')
+    } finally {
+      addExpenseInFlightRef.current = false
     }
   }
 
   const handleShareInvite = async () => {
     try {
-      await navigator.clipboard.writeText(`fairsplit.app/join/${group.invite_code}`)
+      await navigator.clipboard.writeText(`kakisplit.app/join/${group.invite_code}`)
       showToast('Invite link copied!', 'success')
     } catch {
       showToast('Unable to copy link', 'error')
     }
   }
 
-  const handleCopyTelegramCode = async () => {
+  const handleRefreshTelegramCode = async () => {
+    if (!group?.id || !user?.id) return
     try {
-      await navigator.clipboard.writeText(telegramCode)
+      setIsTelegramConnecting(true)
+      const tokenData = await createTelegramLinkToken({ groupId: group.id, createdBy: user.id })
+      setTelegramCode(tokenData.token || '')
+      setTelegramCodeDisplay(tokenData.formattedToken || tokenData.token || '')
+      setTelegramCodeExpiresAt(tokenData.expiresAt || null)
+      setTelegramCodeCopied(false)
+      showToast('New Telegram link code generated', 'success')
+    } catch (error) {
+      showToast(error.message || 'Unable to refresh Telegram code', 'error')
+    } finally {
+      setIsTelegramConnecting(false)
+    }
+  }
+
+  const handleCopyTelegramCode = async () => {
+    const command = telegramCode ? `/link ${telegramCode}` : ''
+    try {
+      if (!command) {
+        showToast('Generate a code first', 'error')
+        return
+      }
+      await navigator.clipboard.writeText(command)
       setTelegramCodeCopied(true)
       window.setTimeout(() => setTelegramCodeCopied(false), 1400)
     } catch {
@@ -353,11 +484,68 @@ export default function GroupHome() {
     }
   }
 
-  const handleDisconnectTelegram = () => {
-    setTelegramConnected(false)
-    setTelegramGroupName(null)
-    setIsTelegramConnecting(false)
-    setTelegramCodeCopied(false)
+  const handleToggleTelegramSetting = async (key, value) => {
+    if (!group?.id) return
+
+    const nextSettings = {
+      ...telegramSettings,
+      [key]: value,
+    }
+
+    setTelegramSettings(nextSettings)
+    try {
+      await updateTelegramSettings({
+        groupId: group.id,
+        settings: {
+          ...nextSettings,
+          reminder_timezone: 'Asia/Singapore',
+        },
+      })
+      showToast('Telegram settings updated', 'success')
+    } catch (error) {
+      setTelegramSettings(telegramSettings)
+      showToast(error.message || 'Unable to update Telegram settings', 'error')
+    }
+  }
+
+  const handleDisconnectTelegram = async () => {
+    if (!group?.id) return
+    try {
+      await disconnectTelegramConnection({ groupId: group.id })
+      setTelegramConnected(false)
+      setTelegramGroupName(null)
+      setIsTelegramConnecting(false)
+      setTelegramCode('')
+      setTelegramCodeDisplay('')
+      setTelegramCodeExpiresAt(null)
+      setTelegramCodeCopied(false)
+      showToast('Telegram disconnected', 'success')
+      await loadGroup()
+    } catch (error) {
+      showToast(error.message || 'Unable to disconnect Telegram', 'error')
+    }
+  }
+
+  const handleDeleteGroup = async () => {
+    if (!group || !isOwner || deletingGroup) return
+
+    const confirmed = window.confirm(`Delete "${group.name}" and all its expenses/payments? This cannot be undone.`)
+    if (!confirmed) return
+
+    setDeletingGroup(true)
+    try {
+      await deleteGroup({ groupId: group.id, userId: user.id })
+      if (localStorage.getItem('kakisplit:lastGroupId') === group.id) {
+        localStorage.removeItem('kakisplit:lastGroupId')
+      }
+      showToast('Group deleted', 'success')
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      showToast(error.message || 'Unable to delete group', 'error')
+    } finally {
+      setDeletingGroup(false)
+      setShowMenu(false)
+    }
   }
 
   return (
@@ -490,31 +678,53 @@ export default function GroupHome() {
             <span className="font-semibold text-gray-800 text-sm">Insights</span>
           </button>
 
-          <button
-            onClick={() => {
-              setShowMenu(false)
-              setShowTelegramSheet(true)
-            }}
-            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
-          >
-            <span className="text-xl w-8 text-center">💬</span>
-            <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
-          </button>
-        </div>
-      </BottomSheet>
+            <button
+              onClick={() => {
+                setShowMenu(false)
+                setShowTelegramSheet(true)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+            >
+              <span className="text-xl w-8 text-center">💬</span>
+              <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
+            </button>
 
-      <ConnectTelegramSheet
-        isOpen={showTelegramSheet}
-        onClose={() => setShowTelegramSheet(false)}
-        groupName={group.name}
-        isConnected={telegramConnected}
-        telegramGroupName={telegramGroupName}
-        isConnecting={isTelegramConnecting}
-        code={telegramCode}
-        onCopy={handleCopyTelegramCode}
-        copied={telegramCodeCopied}
-        onDisconnect={handleDisconnectTelegram}
-      />
+              <button
+                onClick={handleDeleteGroup}
+                disabled={!isOwner || deletingGroup}
+                className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left disabled:opacity-60 ${
+                  isOwner ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <span className="text-xl w-8 text-center">🗑️</span>
+                <div className="min-w-0">
+                  <span className={`font-semibold text-sm ${isOwner ? 'text-red-600' : 'text-gray-500'}`}>
+                    {isOwner ? (deletingGroup ? 'Deleting group...' : 'Delete group') : 'Delete group (owner only)'}
+                  </span>
+                  {!isOwner && <p className="text-xs text-gray-400 mt-0.5">Ask the group owner to delete this group.</p>}
+                </div>
+              </button>
+            </div>
+          </BottomSheet>
+
+
+        <ConnectTelegramSheet
+          isOpen={showTelegramSheet}
+          onClose={() => setShowTelegramSheet(false)}
+          groupName={group.name}
+          isConnected={telegramConnected}
+          telegramGroupName={telegramGroupName}
+          isConnecting={isTelegramConnecting}
+          code={telegramCodeDisplay}
+          codeExpiresAt={telegramCodeExpiresAt}
+          onCopy={handleCopyTelegramCode}
+          copied={telegramCodeCopied}
+          onDisconnect={handleDisconnectTelegram}
+          settings={telegramSettings}
+          onToggleSetting={handleToggleTelegramSetting}
+          onRefreshCode={handleRefreshTelegramCode}
+        />
+
 
       <NudgeSheet
         isOpen={Boolean(nudgeBalance)}

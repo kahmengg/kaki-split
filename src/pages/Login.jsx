@@ -71,8 +71,8 @@ export default function Login() {
 
       <div className="relative z-10 px-6 pt-10 pb-6 text-white">
         <div className="flex items-center gap-2 mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-white text-emerald-600 flex items-center justify-center font-black text-lg shadow-sm">FS</div>
-          <span className="font-bold text-xl tracking-tight">FairSplit</span>
+<div className="w-11 h-11 rounded-2xl bg-white text-emerald-600 flex items-center justify-center font-black text-lg shadow-sm">KS</div>
+            <span className="font-bold text-xl tracking-tight">KakiSplit</span>
         </div>
 
         <h1 className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider bg-white/15 rounded-full px-3 py-1 border border-white/20">

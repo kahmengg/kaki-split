@@ -1,5 +1,19 @@
 {
+  "crons": [
+    {
+      "path": "/api/telegram/reminders",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/telegram/dispatch",
+      "schedule": "* * * * *"
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

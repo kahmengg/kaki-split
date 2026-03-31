@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 const HomeIcon = ({ filled }) => (
@@ -24,8 +24,25 @@ export default function BottomNav({ onFABPress, groupId }) {
   const location = useLocation()
   const path = location.pathname
 
+  const activeGroupId = useMemo(() => {
+    if (groupId) return groupId
+    const [, route, id] = path.split('/')
+    if (route === 'groups' && id) return id
+    return null
+  }, [groupId, path])
+
+  useEffect(() => {
+    if (!activeGroupId) return
+    localStorage.setItem('kakisplit:lastGroupId', activeGroupId)
+  }, [activeGroupId])
+
+  const activityGroupId = useMemo(
+    () => activeGroupId || localStorage.getItem('kakisplit:lastGroupId') || null,
+    [activeGroupId]
+  )
+
   const isHome = path === '/dashboard' || path === '/'
-  const isActivity = path.includes('/groups/') && !path.includes('/insights') && !path.includes('/pay') && !path.includes('/summary')
+  const isActivity = path === '/activity'
   const isProfile = path === '/profile'
 
   return (
@@ -39,13 +56,14 @@ export default function BottomNav({ onFABPress, groupId }) {
           <span className="text-[10px] font-medium">Home</span>
         </button>
 
-        <button
-          onClick={() => {
-            if (groupId) navigate(`/groups/${groupId}`)
-            else navigate('/dashboard')
-          }}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isActivity ? 'text-emerald-600' : 'text-gray-400'}`}
-        >
+              <button
+                onClick={() => navigate('/activity')}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isActivity ? 'text-emerald-600' : 'text-gray-400'}`}
+                title={activityGroupId ? 'Open latest group activity' : 'View your recent group activity'}
+              >
+
+
+
           <ActivityIcon filled={isActivity} />
           <span className="text-[10px] font-medium">Activity</span>
         </button>

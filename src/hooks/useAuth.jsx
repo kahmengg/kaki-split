@@ -2,12 +2,27 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+const AUTH_INIT_TIMEOUT_MS = 10000
+const PROFILE_LOAD_TIMEOUT_MS = 8000
+
+function withTimeout(promise, ms, errorMessage) {
+  let timeoutId
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(errorMessage))
+    }, ms)
+  })
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    window.clearTimeout(timeoutId)
+  })
+}
 
 function fallbackName(user) {
   const fromMeta = user?.user_metadata?.display_name || user?.user_metadata?.full_name
   if (fromMeta && fromMeta.trim()) return fromMeta.trim()
   if (user?.email) return user.email.split('@')[0]
-  return 'FairSplit User'
+  return 'KakiSplit User'
 }
 
 async function ensureProfileRow(user) {
@@ -42,6 +57,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState(null)
 
   const loadProfile = useCallback(async (nextUser) => {
     if (!nextUser?.id) {
@@ -49,7 +65,11 @@ export function AuthProvider({ children }) {
       return null
     }
 
-    const nextProfile = await ensureProfileRow(nextUser)
+    const nextProfile = await withTimeout(
+      ensureProfileRow(nextUser),
+      PROFILE_LOAD_TIMEOUT_MS,
+      'Profile loading timed out. Please refresh or sign in again.'
+    )
     setProfile(nextProfile)
     return nextProfile
   }, [])
@@ -57,8 +77,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let isMounted = true
 
-    supabase.auth
-      .getSession()
+    withTimeout(
+      supabase.auth.getSession(),
+      AUTH_INIT_TIMEOUT_MS,
+      'Session check timed out. Please refresh or sign in again.'
+    )
       .then(async ({ data, error }) => {
         if (error) throw error
 
@@ -66,6 +89,7 @@ export function AuthProvider({ children }) {
         const currentSession = data.session
         setSession(currentSession)
         setUser(currentSession?.user ?? null)
+        setAuthError(null)
 
         if (currentSession?.user) {
           await loadProfile(currentSession.user)
@@ -73,6 +97,11 @@ export function AuthProvider({ children }) {
       })
       .catch((error) => {
         console.error('Failed to initialize auth session', error)
+        if (!isMounted) return
+        setSession(null)
+        setUser(null)
+        setProfile(null)
+        setAuthError(error.message || 'Unable to verify your session right now.')
       })
       .finally(() => {
         if (isMounted) setLoading(false)
@@ -85,12 +114,15 @@ export function AuthProvider({ children }) {
       if (nextSession?.user) {
         try {
           await loadProfile(nextSession.user)
+          setAuthError(null)
         } catch (error) {
           console.error('Failed to refresh profile after auth state change', error)
           setProfile(null)
+          setAuthError(error.message || 'Unable to load your profile. Please sign in again.')
         }
       } else {
         setProfile(null)
+        setAuthError(null)
       }
 
       setLoading(false)
@@ -156,13 +188,14 @@ export function AuthProvider({ children }) {
       user,
       profile,
       loading,
+      authError,
       signIn,
       signUp,
       signInWithGoogle,
       signOut,
       refreshProfile,
     }),
-    [loading, profile, refreshProfile, session, signIn, signInWithGoogle, signOut, signUp, user]
+    [authError, loading, profile, refreshProfile, session, signIn, signInWithGoogle, signOut, signUp, user]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

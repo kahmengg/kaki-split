@@ -42,7 +42,7 @@ export default function TripSummary() {
   const members = useMemo(() => data?.members || [], [data?.members])
 
   const shareText = useMemo(() => {
-    if (!data?.group) return 'Trip summary from FairSplit.'
+    if (!data?.group) return 'Trip summary from KakiSplit.'
     return `We spent ${formatMoney(data.totalSpend, data.group.base_currency)} on ${data.group.name}!`
   }, [data?.group, data?.totalSpend])
 
@@ -53,7 +53,7 @@ export default function TripSummary() {
       try {
         await navigator.share({
           title: `${data.group.name} — Trip Summary`,
-          text: `${shareText} Check it out on FairSplit.`,
+          text: `${shareText} Check it out on KakiSplit.`,
         })
       } catch {
         // User dismissed share sheet.
@@ -117,9 +117,9 @@ export default function TripSummary() {
             <div className="relative">
               <div className="flex items-center gap-1.5 mb-5">
                 <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center">
-                  <span className="text-emerald-600 font-black text-xs">FS</span>
+                  <span className="text-emerald-600 font-black text-xs">KS</span>
                 </div>
-                <span className="text-white/80 text-xs font-semibold">FairSplit</span>
+                <span className="text-white/80 text-xs font-semibold">KakiSplit</span>
               </div>
 
               <h2 className="text-3xl font-black text-white mb-1">{data.group.name}</h2>
@@ -154,8 +154,8 @@ export default function TripSummary() {
               )}
 
               <div className="flex items-center justify-between pt-3 border-t border-white/20">
-                <p className="text-white/60 text-xs">{members.length} friends · powered by FairSplit</p>
-                <p className="text-white/60 text-xs">fairsplit.app</p>
+                <p className="text-white/60 text-xs">{members.length} friends · powered by KakiSplit</p>
+                <p className="text-white/60 text-xs">kakisplit.app</p>
               </div>
             </div>
           </div>
