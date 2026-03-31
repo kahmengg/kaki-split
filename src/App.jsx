@@ -12,7 +12,7 @@ import Activity from './pages/Activity'
 import Profile from './pages/Profile'
 
 function RequireAuth({ children }) {
-  const { user, loading, authError } = useAuth()
+  const { user, loading, session } = useAuth()
 
   if (loading) {
     return (
@@ -26,15 +26,15 @@ function RequireAuth({ children }) {
     )
   }
 
-  if (authError || !user) {
-    return <Navigate to="/login" replace state={authError ? { authError } : undefined} />
+  if (!user && !session) {
+    return <Navigate to="/login" replace />
   }
 
   return children
 }
 
 function PublicOnly({ children }) {
-  const { user, loading, authError } = useAuth()
+  const { user, loading, authError, session } = useAuth()
   const showToast = useToast()
 
   useEffect(() => {
@@ -50,7 +50,7 @@ function PublicOnly({ children }) {
     )
   }
 
-  if (user) {
+  if (user || session) {
     return <Navigate to="/dashboard" replace />
   }
 

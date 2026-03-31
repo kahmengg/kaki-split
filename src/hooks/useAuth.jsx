@@ -2,8 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
-const AUTH_INIT_TIMEOUT_MS = 10000
-const PROFILE_LOAD_TIMEOUT_MS = 8000
+const AUTH_INIT_TIMEOUT_MS = 15000
+const PROFILE_LOAD_TIMEOUT_MS = 15000
 
 function withTimeout(promise, ms, errorMessage) {
   let timeoutId
@@ -98,9 +98,6 @@ export function AuthProvider({ children }) {
       .catch((error) => {
         console.error('Failed to initialize auth session', error)
         if (!isMounted) return
-        setSession(null)
-        setUser(null)
-        setProfile(null)
         setAuthError(error.message || 'Unable to verify your session right now.')
       })
       .finally(() => {
