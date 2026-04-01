@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { computeNetBalances, settleNetBalances } from './balances'
 
+const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
+
 const PROFILE_COLUMNS = 'id,display_name,email,avatar_url,avatar_color,paynow_number,grabpay_handle,paylah_handle'
 const TELEGRAM_TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const TELEGRAM_LINK_TOKEN_LENGTH = 6
@@ -46,6 +48,21 @@ function normalizeTelegramToken(token) {
 function normalizeEventPayload(payload) {
   if (!payload || typeof payload !== 'object') return {}
   return payload
+}
+
+function isAuthLockError(error) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('auth token was released because another request stole it') || message.includes('lockmanager')
+}
+
+async function withAuthLockRetry(operation) {
+  try {
+    return await operation()
+  } catch (error) {
+    if (!isAuthLockError(error)) throw error
+    await new Promise((resolve) => window.setTimeout(resolve, 250))
+    return operation()
+  }
 }
 
 function formatTelegramCode(code) {
@@ -324,30 +341,68 @@ export async function joinGroupByInviteCode({ inviteCode, userId }) {
   if (!normalizedCode) throw new Error('Invite code is missing')
   if (!userId) throw new Error('Please sign in to join this group')
 
-  const { data: group, error: groupError } = await supabase
-    .from('groups')
-    .select('id,name,invite_code')
-    .eq('invite_code', normalizedCode)
-    .maybeSingle()
+  const { data: group, error: groupError } = await withAuthLockRetry(() =>
+    supabase.from('groups').select('id,name,invite_code').eq('invite_code', normalizedCode).maybeSingle()
+  )
 
   if (groupError) throw groupError
   if (!group) throw new Error('Invalid invite code')
 
-  const { error: membershipError } = await supabase.from('group_members').upsert(
-    {
-      group_id: group.id,
-      user_id: userId,
-      role: 'member',
-    },
-    { onConflict: 'group_id,user_id', ignoreDuplicates: true }
+  const { error: membershipError } = await withAuthLockRetry(() =>
+    supabase.from('group_members').upsert(
+      {
+        group_id: group.id,
+        user_id: userId,
+        role: 'member',
+      },
+      { onConflict: 'group_id,user_id', ignoreDuplicates: true }
+    )
   )
 
   if (membershipError) throw membershipError
 
+  localStorage.removeItem(PENDING_INVITE_KEY)
   return group
 }
 
+async function unlinkTelegramForDeletedGroup({ groupId }) {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError) throw sessionError
+  if (!session?.access_token) return
+
+  const response = await fetch('/api/telegram/unlink-group', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ groupId }),
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.error || 'Unable to unlink Telegram connection for this group')
+  }
+}
+
 export async function deleteGroup({ groupId, userId }) {
+  const { data: targetGroup, error: targetGroupError } = await supabase
+    .from('groups')
+    .select('id,created_by')
+    .eq('id', groupId)
+    .maybeSingle()
+
+  if (targetGroupError) throw targetGroupError
+  if (!targetGroup || targetGroup.created_by !== userId) {
+    throw new Error('Only the group owner can delete this group, or it no longer exists.')
+  }
+
+  await unlinkTelegramForDeletedGroup({ groupId })
+
   const { data, error } = await supabase
     .from('groups')
     .delete()

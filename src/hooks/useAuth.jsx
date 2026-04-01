@@ -6,6 +6,21 @@ const AUTH_INIT_TIMEOUT_MS = 15000
 const PROFILE_LOAD_TIMEOUT_MS = 15000
 const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
+function isRecoverableAuthLockError(error) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('auth token was released because another request stole it') || message.includes('lockmanager')
+}
+
+async function withAuthLockRetry(operation) {
+  try {
+    return await operation()
+  } catch (error) {
+    if (!isRecoverableAuthLockError(error)) throw error
+    await new Promise((resolve) => window.setTimeout(resolve, 250))
+    return operation()
+  }
+}
+
 function withTimeout(promise, ms, errorMessage) {
   let timeoutId
   const timeoutPromise = new Promise((_, reject) => {
@@ -78,11 +93,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let isMounted = true
 
-    withTimeout(
-      supabase.auth.getSession(),
-      AUTH_INIT_TIMEOUT_MS,
-      'Session check timed out. Please refresh or sign in again.'
-    )
+  withTimeout(
+        withAuthLockRetry(() => supabase.auth.getSession()),
+        AUTH_INIT_TIMEOUT_MS,
+        'Session check timed out. Please refresh or sign in again.'
+      )
+
       .then(async ({ data, error }) => {
         if (error) throw error
 
@@ -133,7 +149,7 @@ export function AuthProvider({ children }) {
   }, [loadProfile])
 
     const signIn = useCallback(async ({ email, password }) => {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await withAuthLockRetry(() => supabase.auth.signInWithPassword({ email, password }))
       if (error) throw error
 
       const pendingInviteCode = localStorage.getItem(PENDING_INVITE_KEY)
@@ -178,7 +194,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await withAuthLockRetry(() => supabase.auth.signOut())
     if (error) throw error
   }, [])
 

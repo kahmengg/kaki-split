@@ -30,25 +30,34 @@ export default function JoinInvite() {
     let isMounted = true
     joinedRef.current = true
 
-    async function join() {
-      setJoining(true)
-      try {
-        const group = await joinGroupByInviteCode({ inviteCode: normalizedCode, userId: user.id })
-        if (!isMounted) return
-        localStorage.removeItem(PENDING_INVITE_KEY)
-        setJoinedGroupName(group.name || '')
-        showToast(`Joined ${group.name || 'group'}!`, 'success')
-        window.setTimeout(() => {
-          navigate(`/groups/${group.id}`, { replace: true })
-        }, 250)
-      } catch (error) {
-        if (!isMounted) return
-        showToast(error.message || 'Unable to join this group', 'error')
-        navigate('/dashboard', { replace: true })
-      } finally {
-        if (isMounted) setJoining(false)
+      async function join() {
+        setJoining(true)
+        try {
+          const group = await joinGroupByInviteCode({ inviteCode: normalizedCode, userId: user.id })
+          if (!isMounted) return
+          setJoinedGroupName(group.name || '')
+          showToast(`Joined ${group.name || 'group'}!`, 'success')
+          window.setTimeout(() => {
+            navigate(`/groups/${group.id}`, { replace: true })
+          }, 250)
+        } catch (error) {
+          if (!isMounted) return
+
+          const message = String(error?.message || '')
+          if (message.toLowerCase().includes('auth token was released because another request stole it')) {
+            window.setTimeout(() => {
+              joinedRef.current = false
+            }, 300)
+            return
+          }
+
+          showToast(error.message || 'Unable to join this group', 'error')
+          navigate('/dashboard', { replace: true })
+        } finally {
+          if (isMounted) setJoining(false)
+        }
       }
-    }
+
 
     join()
 

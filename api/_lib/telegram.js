@@ -33,6 +33,133 @@ async function sendTelegramMessage({ botToken, chatId, text }) {
   return { ok: response.ok && result?.ok, status: response.status, result }
 }
 
+function toPendingRetryTimestamp() {
+  return new Date(Date.now() + 2 * 60 * 1000).toISOString()
+}
+
+function toOutboxMessageRow(row) {
+  const payload = row.payload || {}
+
+  if (row.event_type === 'expense_added') {
+    return {
+      type: 'expense',
+      text: `• 🧾 ${payload.description || 'Expense'} · ${round2(payload.amount || 0).toFixed(2)}`,
+      amount: round2(payload.amount || 0),
+      createdAt: row.created_at,
+    }
+  }
+
+  if (row.event_type === 'payment_recorded') {
+    return {
+      type: 'payment',
+      text: `• 💸 Payment recorded · ${round2(payload.amount || 0).toFixed(2)}`,
+      amount: round2(payload.amount || 0),
+      createdAt: row.created_at,
+    }
+  }
+
+  return null
+}
+
+function buildDigestMessage(rows) {
+  const normalizedRows = rows
+    .map(toOutboxMessageRow)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+  if (normalizedRows.length === 0) return null
+
+  const expenseRows = normalizedRows.filter((row) => row.type === 'expense')
+  const paymentRows = normalizedRows.filter((row) => row.type === 'payment')
+  const expenseTotal = round2(expenseRows.reduce((sum, row) => sum + row.amount, 0))
+  const paymentTotal = round2(paymentRows.reduce((sum, row) => sum + row.amount, 0))
+
+  const lines = ['📬 KakiSplit updates']
+
+  if (expenseRows.length > 0) {
+    lines.push(`🧾 ${expenseRows.length} expense${expenseRows.length > 1 ? 's' : ''} added (${expenseTotal.toFixed(2)} total)`)
+  }
+
+  if (paymentRows.length > 0) {
+    lines.push(`💸 ${paymentRows.length} payment${paymentRows.length > 1 ? 's' : ''} recorded (${paymentTotal.toFixed(2)} total)`)
+  }
+
+  lines.push('')
+  lines.push('Latest activity:')
+
+  const previewRows = normalizedRows.slice(-5)
+  for (const row of previewRows) {
+    lines.push(row.text)
+  }
+
+  if (normalizedRows.length > previewRows.length) {
+    lines.push(`• +${normalizedRows.length - previewRows.length} more update${normalizedRows.length - previewRows.length > 1 ? 's' : ''}`)
+  }
+
+  return lines.join('\n')
+}
+
+function shouldDisableConnection(sendResult) {
+  const description = String(sendResult?.result?.description || '').toLowerCase()
+  return (
+    description.includes('chat not found') ||
+    description.includes('group chat was upgraded') ||
+    description.includes('bot was kicked') ||
+    description.includes('forbidden')
+  )
+}
+
+async function markOutboxRows(ids, update) {
+  if (!Array.isArray(ids) || ids.length === 0) return
+
+  await adminSupabase.from('telegram_outbox').update(update).in('id', ids)
+}
+
+async function markBatchFailed(rows, errorMessage, { retry = true } = {}) {
+  for (const row of rows) {
+    const attempts = Number(row.attempts || 0) + 1
+    const shouldFail = !retry || attempts >= 5
+
+    await adminSupabase
+      .from('telegram_outbox')
+      .update({
+        status: shouldFail ? 'failed' : 'pending',
+        attempts,
+        error_message: errorMessage,
+        available_at: shouldFail ? new Date().toISOString() : toPendingRetryTimestamp(),
+      })
+      .eq('id', row.id)
+  }
+}
+
+async function deactivateConnectionsForChat(telegramChatId) {
+  if (!telegramChatId) return
+
+  const { data: affectedRows, error: fetchError } = await adminSupabase
+    .from('telegram_connections')
+    .select('group_id')
+    .eq('telegram_chat_id', telegramChatId)
+
+  if (fetchError) throw fetchError
+
+  const groupIds = (affectedRows || []).map((row) => row.group_id)
+  if (groupIds.length === 0) return
+
+  const { error: deactivateError } = await adminSupabase
+    .from('telegram_connections')
+    .update({ is_active: false })
+    .eq('telegram_chat_id', telegramChatId)
+
+  if (deactivateError) throw deactivateError
+
+  const { error: groupUpdateError } = await adminSupabase
+    .from('groups')
+    .update({ telegram_connected: false, telegram_group_name: null })
+    .in('id', groupIds)
+
+  if (groupUpdateError) throw groupUpdateError
+}
+
 export async function handleTelegramWebhook({ botToken, update }) {
   if (!update || typeof update !== 'object') return { ok: true, ignored: true }
 
@@ -105,20 +232,39 @@ export async function handleTelegramWebhook({ botToken, update }) {
   await sendTelegramMessage({
     botToken,
     chatId: chat.id,
-    text: '✅ KakiSplit connected. Daily reminders run at 12:00 AM.',
+    text: '✅ KakiSplit connected. We send a daily reminder with an updates summary once per day.',
   })
 
   return { ok: true, linkedGroupId: linkToken.group_id }
 }
 
+export async function unlinkGroupTelegramConnection({ groupId }) {
+  if (!groupId) return
+
+  const { error: connectionError } = await adminSupabase
+    .from('telegram_connections')
+    .update({ is_active: false })
+    .eq('group_id', groupId)
+
+  if (connectionError) throw connectionError
+
+  const { error: groupError } = await adminSupabase
+    .from('groups')
+    .update({ telegram_connected: false, telegram_group_name: null })
+    .eq('id', groupId)
+
+  if (groupError) throw groupError
+}
+
 export async function processTelegramOutbox({ botToken }) {
   const { data: rows, error } = await adminSupabase
     .from('telegram_outbox')
-    .select('id,group_id,event_type,payload,attempts')
+    .select('id,group_id,event_type,payload,attempts,created_at')
     .eq('status', 'pending')
+    .eq('event_type', 'daily_reminder')
     .lte('available_at', new Date().toISOString())
     .order('created_at', { ascending: true })
-    .limit(25)
+    .limit(50)
 
   if (error) throw error
   if (!rows || rows.length === 0) return { processed: 0, sent: 0, failed: 0 }
@@ -132,64 +278,88 @@ export async function processTelegramOutbox({ botToken }) {
   if (connectionError) throw connectionError
 
   const connectionByGroup = new Map((connections || []).map((conn) => [conn.group_id, conn]))
+  const rowsByGroup = new Map()
 
-  const messageForEvent = (row) => {
-    const payload = row.payload || {}
-    if (row.event_type === 'expense_added') {
-      return `🧾 New expense\n${payload.description || 'Expense'} · ${round2(payload.amount || 0).toFixed(2)}`
+  for (const row of rows) {
+    if (!rowsByGroup.has(row.group_id)) {
+      rowsByGroup.set(row.group_id, [])
     }
-    if (row.event_type === 'payment_recorded') {
-      return `💸 Payment recorded\nAmount: ${round2(payload.amount || 0).toFixed(2)}`
-    }
-    if (row.event_type === 'daily_reminder') {
-      return payload.message || '⏰ Daily reminder: unsettled balances remain.'
-    }
-    return null
+    rowsByGroup.get(row.group_id).push(row)
   }
 
   let sent = 0
   let failed = 0
 
-  for (const row of rows) {
-    const connection = connectionByGroup.get(row.group_id)
-    const skipBySetting =
-      !connection?.is_active ||
-      (row.event_type === 'expense_added' && !connection?.expense_alerts_enabled) ||
-      (row.event_type === 'payment_recorded' && !connection?.payment_alerts_enabled) ||
-      (row.event_type === 'daily_reminder' && !connection?.daily_reminder_enabled)
+  for (const [groupId, groupRows] of rowsByGroup.entries()) {
+    const connection = connectionByGroup.get(groupId)
 
-    if (skipBySetting) {
-      await adminSupabase.from('telegram_outbox').update({ status: 'sent', sent_at: new Date().toISOString(), error_message: null }).eq('id', row.id)
-      continue
-    }
+      const skippedRows = []
+      const reminderRows = []
 
-    const text = messageForEvent(row)
-    if (!text || !connection?.telegram_chat_id) {
-      await adminSupabase
-        .from('telegram_outbox')
-        .update({ status: 'failed', attempts: Number(row.attempts || 0) + 1, error_message: 'Missing chat or unsupported event' })
-        .eq('id', row.id)
-      failed += 1
-      continue
-    }
+      for (const row of groupRows) {
+        const skipBySetting = !connection?.is_active || (row.event_type === 'daily_reminder' && !connection?.daily_reminder_enabled)
 
-    const sendResult = await sendTelegramMessage({ botToken, chatId: connection.telegram_chat_id, text })
-    if (sendResult.ok) {
-      await adminSupabase.from('telegram_outbox').update({ status: 'sent', sent_at: new Date().toISOString(), error_message: null }).eq('id', row.id)
-      sent += 1
-    } else {
-      const attempts = Number(row.attempts || 0) + 1
-      const shouldFail = attempts >= 5
-      await adminSupabase
-        .from('telegram_outbox')
-        .update({
-          status: shouldFail ? 'failed' : 'pending',
-          attempts,
-          error_message: sendResult.result?.description || `HTTP ${sendResult.status}`,
-          available_at: shouldFail ? new Date().toISOString() : new Date(Date.now() + 2 * 60 * 1000).toISOString(),
-        })
-        .eq('id', row.id)
-      failed += 1
+        if (skipBySetting) {
+          skippedRows.push(row)
+          continue
+        }
+
+        if (row.event_type === 'daily_reminder') {
+          reminderRows.push(row)
+        } else {
+          skippedRows.push(row)
+        }
+      }
+
+      if (skippedRows.length > 0) {
+        await markOutboxRows(
+          skippedRows.map((row) => row.id),
+          { status: 'sent', sent_at: new Date().toISOString(), error_message: null }
+        )
+      }
+
+      if (!connection?.telegram_chat_id) {
+        if (reminderRows.length > 0) {
+          await markBatchFailed(reminderRows, 'Missing chat or unsupported event', { retry: false })
+          failed += reminderRows.length
+        }
+        continue
+      }
+
+      for (const row of reminderRows) {
+
+      const message = row.payload?.message || '⏰ Daily reminder: unsettled balances remain.'
+      const sendResult = await sendTelegramMessage({
+        botToken,
+        chatId: connection.telegram_chat_id,
+        text: message,
+      })
+
+      if (sendResult.ok) {
+        await adminSupabase
+          .from('telegram_outbox')
+          .update({ status: 'sent', sent_at: new Date().toISOString(), error_message: null })
+          .eq('id', row.id)
+        sent += 1
+        } else {
+          if (shouldDisableConnection(sendResult)) {
+            await deactivateConnectionsForChat(connection.telegram_chat_id)
+          }
+
+          const attempts = Number(row.attempts || 0) + 1
+
+        const shouldFail = attempts >= 5
+        await adminSupabase
+          .from('telegram_outbox')
+          .update({
+            status: shouldFail ? 'failed' : 'pending',
+            attempts,
+            error_message: sendResult.result?.description || `HTTP ${sendResult.status}`,
+            available_at: shouldFail ? new Date().toISOString() : toPendingRetryTimestamp(),
+          })
+          .eq('id', row.id)
+        failed += 1
+      }
     }
   }
 
@@ -274,15 +444,18 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
   let queued = 0
 
   for (const row of rows) {
-    const hour = Number(row.reminder_hour ?? 0)
-    const minute = Number(row.reminder_minute ?? 0)
-    const timezone = row.reminder_timezone || 'Asia/Singapore'
-    const localNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
+      const hour = Number(row.reminder_hour ?? 0)
+      const minute = Number(row.reminder_minute ?? 0)
+      const timezone = row.reminder_timezone || 'Asia/Singapore'
+      const localNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
 
-    if (localNow.getHours() !== hour || localNow.getMinutes() !== minute) continue
+      const dateKey = toDateInTimezone(now, timezone)
+      if (row.last_daily_reminder_date === dateKey) continue
 
-    const dateKey = toDateInTimezone(now, timezone)
-    if (row.last_daily_reminder_date === dateKey) continue
+      const scheduledMinuteOfDay = hour * 60 + minute
+      const nowMinuteOfDay = localNow.getHours() * 60 + localNow.getMinutes()
+      if (nowMinuteOfDay < scheduledMinuteOfDay) continue
+
 
     const { data: group, error: groupError } = await adminSupabase.from('groups').select('id,name').eq('id', row.group_id).maybeSingle()
     if (groupError) throw groupError
@@ -321,48 +494,84 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
       }
     }
 
-    const memberIds = (members || []).map((member) => member.user_id)
-    const net = computeNetBalances({ memberIds, expenses: expenses || [], splitsByExpenseId, payments: payments || [] })
-    const smartBalances = settleNetBalances(net)
+      const memberIds = (members || []).map((member) => member.user_id)
+      const net = computeNetBalances({ memberIds, expenses: expenses || [], splitsByExpenseId, payments: payments || [] })
+      const smartBalances = settleNetBalances(net)
 
-    if (smartBalances.length > 0) {
-      const userIds = [...new Set(smartBalances.flatMap((item) => [item.from, item.to]))]
-      const { data: profiles, error: profileError } = await adminSupabase
-        .from('profiles')
-        .select('id,display_name,email')
-        .in('id', userIds)
+      const { data: pendingActivityRows, error: pendingActivityError } = await adminSupabase
+        .from('telegram_outbox')
+        .select('id,event_type,payload,created_at')
+        .eq('group_id', row.group_id)
+        .eq('status', 'pending')
+        .in('event_type', ['expense_added', 'payment_recorded'])
+        .order('created_at', { ascending: true })
+        .limit(100)
 
-      if (profileError) throw profileError
+      if (pendingActivityError) throw pendingActivityError
 
-      const profileById = new Map(
-        (profiles || []).map((profile) => [profile.id, profile.display_name || String(profile.email || '').split('@')[0] || 'Member'])
-      )
+      const activityDigestMessage = buildDigestMessage(pendingActivityRows || [])
+      if ((pendingActivityRows || []).length > 0) {
+        const { error: markActivityRowsSentError } = await adminSupabase
+          .from('telegram_outbox')
+          .update({ status: 'sent', sent_at: now.toISOString(), error_message: null })
+          .in(
+            'id',
+            (pendingActivityRows || []).map((activityRow) => activityRow.id)
+          )
 
-      const lines = smartBalances.slice(0, 5).map((item) => {
-        const fromName = profileById.get(item.from) || 'Member'
-        const toName = profileById.get(item.to) || 'Member'
-        return `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)}`
-      })
+        if (markActivityRowsSentError) throw markActivityRowsSentError
+      }
 
-      const message = [
-        `⏰ Daily reminder for ${group.name}`,
-        `${smartBalances.length} unsettled balance${smartBalances.length > 1 ? 's' : ''} remaining:`,
-        ...lines,
-      ].join('\n')
+      if (smartBalances.length > 0 || activityDigestMessage) {
+        let lines = []
 
-      const { error: outboxError } = await adminSupabase.from('telegram_outbox').insert({
-        group_id: row.group_id,
-        event_type: 'daily_reminder',
-        payload: {
-          message,
-          generated_at: now.toISOString(),
-        },
-        status: 'pending',
-      })
+        if (smartBalances.length > 0) {
+          const userIds = [...new Set(smartBalances.flatMap((item) => [item.from, item.to]))]
+          const { data: profiles, error: profileError } = await adminSupabase
+            .from('profiles')
+            .select('id,display_name,email')
+            .in('id', userIds)
 
-      if (outboxError) throw outboxError
-      queued += 1
-    }
+          if (profileError) throw profileError
+
+          const profileById = new Map(
+            (profiles || []).map((profile) => [profile.id, profile.display_name || String(profile.email || '').split('@')[0] || 'Member'])
+          )
+
+          lines = smartBalances.slice(0, 5).map((item) => {
+            const fromName = profileById.get(item.from) || 'Member'
+            const toName = profileById.get(item.to) || 'Member'
+            return `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)}`
+          })
+        }
+
+        const messageLines = [`⏰ Daily reminder for ${group.name}`]
+
+        if (smartBalances.length > 0) {
+          messageLines.push(`${smartBalances.length} unsettled balance${smartBalances.length > 1 ? 's' : ''} remaining:`)
+          messageLines.push(...lines)
+        } else {
+          messageLines.push('No unsettled balances right now.')
+        }
+
+        if (activityDigestMessage) {
+          messageLines.push('')
+          messageLines.push(activityDigestMessage)
+        }
+
+        const { error: outboxError } = await adminSupabase.from('telegram_outbox').insert({
+          group_id: row.group_id,
+          event_type: 'daily_reminder',
+          payload: {
+            message: messageLines.join('\n'),
+            generated_at: now.toISOString(),
+          },
+          status: 'pending',
+        })
+
+        if (outboxError) throw outboxError
+        queued += 1
+      }
 
     const { error: updateError } = await adminSupabase
       .from('telegram_connections')
