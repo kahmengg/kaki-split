@@ -341,25 +341,32 @@ export async function joinGroupByInviteCode({ inviteCode, userId }) {
   if (!normalizedCode) throw new Error('Invite code is missing')
   if (!userId) throw new Error('Please sign in to join this group')
 
-  const { data: group, error: groupError } = await withAuthLockRetry(() =>
-    supabase.from('groups').select('id,name,invite_code').eq('invite_code', normalizedCode).maybeSingle()
-  )
+  const {
+    data: { session },
+    error: sessionError,
+  } = await withAuthLockRetry(() => supabase.auth.getSession())
 
-  if (groupError) throw groupError
-  if (!group) throw new Error('Invalid invite code')
+  if (sessionError) throw sessionError
+  if (!session?.access_token) throw new Error('Please sign in again to join this group')
 
-  const { error: membershipError } = await withAuthLockRetry(() =>
-    supabase.from('group_members').upsert(
-      {
-        group_id: group.id,
-        user_id: userId,
-        role: 'member',
-      },
-      { onConflict: 'group_id,user_id', ignoreDuplicates: true }
-    )
-  )
+  const response = await fetch('/api/join-invite', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ inviteCode: normalizedCode }),
+  })
 
-  if (membershipError) throw membershipError
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to join this group')
+  }
+
+  const group = payload?.group
+  if (!group?.id) {
+    throw new Error('Unable to join this group')
+  }
 
   localStorage.removeItem(PENDING_INVITE_KEY)
   return group
