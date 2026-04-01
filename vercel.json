@@ -1,12 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/telegram/reminders",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/telegram/dispatch",
-      "schedule": "*/5 * * * *"
+      "path": "/api/telegram/daily",
+      "schedule": "0 0 * * *"
     }
   ],
   "rewrites": [
