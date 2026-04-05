@@ -229,10 +229,19 @@ grant execute on function public.is_group_member(uuid, uuid) to authenticated;
 grant execute on function public.is_group_owner(uuid, uuid) to authenticated;
 
 drop policy if exists "profiles_select_own" on public.profiles;
-create policy "profiles_select_own"
+drop policy if exists "profiles_select_group_member" on public.profiles;
+create policy "profiles_select_group_member"
 on public.profiles for select
 to authenticated
-using (id = auth.uid());
+using (
+  id = auth.uid()
+  or exists (
+    select 1
+    from public.group_members gm
+    where gm.user_id = profiles.id
+      and public.is_group_member(gm.group_id, auth.uid())
+  )
+);
 
 drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own"
@@ -276,13 +285,11 @@ to authenticated
 using (created_by = auth.uid());
 
 drop policy if exists "group_members_select_self_or_group_owner" on public.group_members;
-create policy "group_members_select_self_or_group_owner"
+drop policy if exists "group_members_select_group_member" on public.group_members;
+create policy "group_members_select_group_member"
 on public.group_members for select
 to authenticated
-using (
-  user_id = auth.uid()
-  or public.is_group_owner(group_id, auth.uid())
-);
+using (public.is_group_member(group_id, auth.uid()));
 
 drop policy if exists "group_members_insert_self_or_group_owner" on public.group_members;
 create policy "group_members_insert_self_or_group_owner"

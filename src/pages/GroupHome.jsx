@@ -155,7 +155,6 @@ function ConnectTelegramSheet({
   isOpen,
   onClose,
   groupName,
-  isOwner,
   isConnected,
   telegramGroupName,
   isConnecting,
@@ -204,12 +203,6 @@ function ConnectTelegramSheet({
             <div className="space-y-4">
               <p className="text-sm text-gray-600 leading-relaxed">Get expense updates and debt reminders in your group chat.</p>
 
-              {!isOwner ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <p className="text-sm font-semibold text-amber-900">Only the group owner can generate a Telegram link code.</p>
-                  <p className="mt-1 text-xs text-amber-700">Ask the owner to open this sheet and share the /link command.</p>
-                </div>
-              ) : (
                 <>
                   <div className="space-y-3 text-sm text-gray-700">
                     <p>
@@ -235,7 +228,7 @@ function ConnectTelegramSheet({
                     </button>
                   </div>
                 </>
-              )}
+
 
               <div className="text-sm text-gray-500 flex items-center gap-2">
                 <span>Waiting for connection...</span>
@@ -337,14 +330,8 @@ export default function GroupHome() {
     if (!showTelegramSheet || telegramConnected || !group || !user?.id) return
 
     let cancelled = false
-    const isOwner = group.created_by === user.id
 
     const ensureToken = async () => {
-      if (!isOwner) {
-        setIsTelegramConnecting(false)
-        return
-      }
-
       setIsTelegramConnecting(true)
       try {
         const existing = await fetchTelegramLinkToken({ groupId: group.id })
@@ -471,10 +458,6 @@ export default function GroupHome() {
 
   const handleRefreshTelegramCode = async () => {
     if (!group?.id || !user?.id) return
-    if (group.created_by !== user.id) {
-      showToast('Only the group owner can generate Telegram link codes', 'error')
-      return
-    }
 
     try {
       setIsTelegramConnecting(true)
@@ -490,6 +473,7 @@ export default function GroupHome() {
       setIsTelegramConnecting(false)
     }
   }
+
 
   const handleCopyTelegramCode = async () => {
     const command = telegramCode ? `/link ${telegramCode}` : ''
@@ -730,23 +714,22 @@ export default function GroupHome() {
           </BottomSheet>
 
 
-          <ConnectTelegramSheet
-            isOpen={showTelegramSheet}
-            onClose={() => setShowTelegramSheet(false)}
-            groupName={group.name}
-            isOwner={isOwner}
-            isConnected={telegramConnected}
-            telegramGroupName={telegramGroupName}
-            isConnecting={isTelegramConnecting}
-            code={telegramCodeDisplay}
-            codeExpiresAt={telegramCodeExpiresAt}
-            onCopy={handleCopyTelegramCode}
-            copied={telegramCodeCopied}
-            onDisconnect={handleDisconnectTelegram}
-            settings={telegramSettings}
-            onToggleSetting={handleToggleTelegramSetting}
-            onRefreshCode={handleRefreshTelegramCode}
-          />
+        <ConnectTelegramSheet
+          isOpen={showTelegramSheet}
+          onClose={() => setShowTelegramSheet(false)}
+          groupName={group.name}
+          isConnected={telegramConnected}
+          telegramGroupName={telegramGroupName}
+          isConnecting={isTelegramConnecting}
+          code={telegramCodeDisplay}
+          codeExpiresAt={telegramCodeExpiresAt}
+          onCopy={handleCopyTelegramCode}
+          copied={telegramCodeCopied}
+          onDisconnect={handleDisconnectTelegram}
+          settings={telegramSettings}
+          onToggleSetting={handleToggleTelegramSetting}
+          onRefreshCode={handleRefreshTelegramCode}
+        />
 
 
       <NudgeSheet

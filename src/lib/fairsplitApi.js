@@ -33,6 +33,24 @@ export function toAppUser(profile) {
   }
 }
 
+function toMemberUser(row) {
+  const profileUser = toAppUser(row?.profiles)
+  if (profileUser) return profileUser
+
+  const fallbackId = row?.user_id
+  if (!fallbackId) return null
+
+  const short = String(fallbackId).slice(0, 8)
+  return {
+    id: fallbackId,
+    name: `Member ${short}`,
+    display_name: `Member ${short}`,
+    email: null,
+    avatar_url: null,
+    avatar_color: colorFromId(fallbackId),
+  }
+}
+
 function generateInviteCode(length = 8) {
   let code = ''
   for (let i = 0; i < length; i += 1) {
@@ -195,9 +213,7 @@ export async function fetchGroupMembers(groupId) {
 
   if (membersError) throw membersError
 
-  const members = (memberRows || [])
-    .map((row) => toAppUser(row.profiles))
-    .filter(Boolean)
+  const members = (memberRows || []).map((row) => toMemberUser(row)).filter(Boolean)
 
   const usersById = members.reduce((acc, member) => {
     acc[member.id] = member
@@ -260,11 +276,12 @@ export async function fetchDashboardData(userId) {
   const paymentsByGroup = groupBy(payments || [], (row) => row.group_id)
   const splitsByExpenseId = groupBy(splits || [], (row) => row.expense_id)
 
-  const usersById = {}
-  for (const row of allMemberRows || []) {
-    const appUser = toAppUser(row.profiles)
-    if (appUser) usersById[appUser.id] = appUser
-  }
+    const usersById = {}
+    for (const row of allMemberRows || []) {
+      const appUser = toMemberUser(row)
+      if (appUser) usersById[appUser.id] = appUser
+    }
+
 
   const hydratedGroups = groups.map((group) => {
     const groupMembers = membersByGroup.get(group.id) || []
@@ -429,61 +446,34 @@ export async function deleteGroup({ groupId, userId }) {
 export async function createTelegramLinkToken({ groupId, createdBy }) {
   if (!groupId || !createdBy) throw new Error('Group and user are required')
 
-  const { data: group, error: groupError } = await supabase
-    .from('groups')
-    .select('created_by')
-    .eq('id', groupId)
-    .maybeSingle()
+  const {
+    data: { session },
+    error: sessionError,
+  } = await withAuthLockRetry(() => supabase.auth.getSession())
 
-  if (groupError) throw groupError
-  if (!group) throw new Error('Group not found')
-  if (group.created_by !== createdBy) {
-    throw new Error('Only the group owner can generate Telegram link codes')
+  if (sessionError) throw sessionError
+  if (!session?.access_token) throw new Error('Please sign in again to generate a Telegram link code')
+
+  const response = await fetch('/api/telegram/link-token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ groupId }),
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to generate Telegram link code')
   }
 
-  const now = new Date()
-  const expiresAt = new Date(now.getTime() + TELEGRAM_LINK_TOKEN_TTL_MINUTES * 60 * 1000).toISOString()
-
-  const { error: expireError } = await supabase
-    .from('telegram_link_tokens')
-    .update({ expires_at: now.toISOString() })
-    .eq('group_id', groupId)
-    .is('used_at', null)
-    .gt('expires_at', now.toISOString())
-
-  if (expireError) {
-    throw toTelegramRlsError(expireError) || expireError
+  return {
+    token: payload?.token || '',
+    formattedToken: payload?.formattedToken || formatTelegramCode(payload?.token || ''),
+    expiresAt: payload?.expiresAt || null,
+    botUsername: TELEGRAM_BOT_USERNAME,
   }
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const token = generateInviteCode(TELEGRAM_LINK_TOKEN_LENGTH)
-    const { data, error } = await supabase
-      .from('telegram_link_tokens')
-      .insert({
-        group_id: groupId,
-        token,
-        created_by: createdBy,
-        expires_at: expiresAt,
-      })
-      .select('token,expires_at')
-      .maybeSingle()
-
-    if (!error && data) {
-      return {
-        token: data.token,
-        formattedToken: formatTelegramCode(data.token),
-        expiresAt: data.expires_at,
-        botUsername: TELEGRAM_BOT_USERNAME,
-      }
-    }
-
-      if (error?.code !== '23505') {
-        throw toTelegramRlsError(error) || error
-      }
-
-  }
-
-  throw new Error('Unable to generate Telegram link code. Please try again.')
 }
 
 export async function fetchTelegramLinkToken({ groupId }) {
