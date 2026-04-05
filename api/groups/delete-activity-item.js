@@ -1,0 +1,171 @@
+import { adminSupabase } from '../_lib/db.js'
+
+function getBearerToken(req) {
+  const header = String(req.headers.authorization || '')
+  if (!header.toLowerCase().startsWith('bearer ')) return ''
+  return header.slice(7).trim()
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  const token = getBearerToken(req)
+  if (!token) {
+    res.status(401).json({ error: 'Missing authorization token' })
+    return
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await adminSupabase.auth.getUser(token)
+
+  if (userError || !user?.id) {
+    res.status(401).json({ error: 'Invalid authorization token' })
+    return
+  }
+
+  const groupId = String(req.body?.groupId || '').trim()
+  const itemType = String(req.body?.itemType || '').trim().toLowerCase()
+  const itemId = String(req.body?.itemId || '').trim()
+
+  if (!groupId) {
+    res.status(400).json({ error: 'groupId is required' })
+    return
+  }
+
+  if (!itemId) {
+    res.status(400).json({ error: 'itemId is required' })
+    return
+  }
+
+  if (!['expense', 'payment', 'event'].includes(itemType)) {
+    res.status(400).json({ error: 'itemType must be one of expense, payment, event' })
+    return
+  }
+
+  const { data: membership, error: membershipError } = await adminSupabase
+    .from('group_members')
+    .select('group_id')
+    .eq('group_id', groupId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    res.status(500).json({ error: membershipError.message || 'Unable to verify group membership' })
+    return
+  }
+
+  if (!membership) {
+    res.status(403).json({ error: 'Only group members can delete activity items' })
+    return
+  }
+
+  if (itemType === 'expense') {
+    const { data: targetExpense, error: expenseLookupError } = await adminSupabase
+      .from('expenses')
+      .select('id')
+      .eq('id', itemId)
+      .eq('group_id', groupId)
+      .maybeSingle()
+
+    if (expenseLookupError) {
+      res.status(500).json({ error: expenseLookupError.message || 'Unable to find expense' })
+      return
+    }
+
+    if (!targetExpense) {
+      res.status(404).json({ error: 'Expense not found in this group' })
+      return
+    }
+
+    const { error: deleteExpenseError } = await adminSupabase.from('expenses').delete().eq('id', itemId).eq('group_id', groupId)
+    if (deleteExpenseError) {
+      res.status(500).json({ error: deleteExpenseError.message || 'Unable to delete expense' })
+      return
+    }
+
+    const { error: deleteExpenseEventError } = await adminSupabase
+      .from('activity_events')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('event_type', 'expense_added')
+      .contains('payload', { expense_id: itemId })
+
+    if (deleteExpenseEventError) {
+      res.status(500).json({ error: deleteExpenseEventError.message || 'Expense deleted, but failed to clean linked activity events' })
+      return
+    }
+
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  if (itemType === 'payment') {
+    const { data: targetPayment, error: paymentLookupError } = await adminSupabase
+      .from('payments')
+      .select('id')
+      .eq('id', itemId)
+      .eq('group_id', groupId)
+      .maybeSingle()
+
+    if (paymentLookupError) {
+      res.status(500).json({ error: paymentLookupError.message || 'Unable to find payment' })
+      return
+    }
+
+    if (!targetPayment) {
+      res.status(404).json({ error: 'Payment not found in this group' })
+      return
+    }
+
+    const { error: deletePaymentError } = await adminSupabase.from('payments').delete().eq('id', itemId).eq('group_id', groupId)
+    if (deletePaymentError) {
+      res.status(500).json({ error: deletePaymentError.message || 'Unable to delete payment' })
+      return
+    }
+
+    const { error: deletePaymentEventError } = await adminSupabase
+      .from('activity_events')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('event_type', 'payment_recorded')
+      .contains('payload', { payment_id: itemId })
+
+    if (deletePaymentEventError) {
+      res.status(500).json({ error: deletePaymentEventError.message || 'Payment deleted, but failed to clean linked activity events' })
+      return
+    }
+
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  const { data: targetEvent, error: eventLookupError } = await adminSupabase
+    .from('activity_events')
+    .select('id')
+    .eq('id', itemId)
+    .eq('group_id', groupId)
+    .maybeSingle()
+
+  if (eventLookupError) {
+    res.status(500).json({ error: eventLookupError.message || 'Unable to find activity event' })
+    return
+  }
+
+  if (!targetEvent) {
+    res.status(404).json({ error: 'Activity event not found in this group' })
+    return
+  }
+
+  const { error: deleteEventError } = await adminSupabase.from('activity_events').delete().eq('id', itemId).eq('group_id', groupId)
+  if (deleteEventError) {
+    res.status(500).json({ error: deleteEventError.message || 'Unable to delete activity event' })
+    return
+  }
+
+  res.status(200).json({ ok: true })
+}

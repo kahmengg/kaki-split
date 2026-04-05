@@ -72,19 +72,20 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user?.id) return
 
-    async function loadDashboard() {
-      setLoading(true)
-      try {
-        await refreshProfile()
-        const data = await fetchDashboardData(user.id)
-        setGroups(data.groups)
-        setUsersById(data.usersById)
-      } catch (error) {
-        showToast(error.message || 'Failed to load groups', 'error')
-      } finally {
-        setLoading(false)
+      async function loadDashboard() {
+        setLoading(true)
+        try {
+          refreshProfile().catch(() => null)
+          const data = await fetchDashboardData(user.id)
+          setGroups(data.groups)
+          setUsersById(data.usersById)
+        } catch (error) {
+          showToast(error.message || 'Failed to load groups', 'error')
+        } finally {
+          setLoading(false)
+        }
       }
-    }
+
 
     loadDashboard()
   }, [refreshProfile, showToast, user?.id])

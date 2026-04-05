@@ -9,8 +9,10 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import {
   addExpense,
+  clearGroupActivity,
   createTelegramLinkToken,
   deleteGroup,
+  deleteGroupActivityItem,
   disconnectTelegramConnection,
   fetchGroupData,
   fetchTelegramLinkToken,
@@ -178,6 +180,8 @@ export default function GroupHome() {
   const [members, setMembers] = useState([])
   const [usersById, setUsersById] = useState({})
   const [expenses, setExpenses] = useState([])
+  const [payments, setPayments] = useState([])
+  const [activityEvents, setActivityEvents] = useState([])
   const [balances, setBalances] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -187,6 +191,12 @@ export default function GroupHome() {
   const [showEditGroupNameSheet, setShowEditGroupNameSheet] = useState(false)
   const [showReminderBanner, setShowReminderBanner] = useState(true)
   const [deletingGroup, setDeletingGroup] = useState(false)
+  const [clearingActivity, setClearingActivity] = useState(false)
+  const [showClearConfirmSheet, setShowClearConfirmSheet] = useState(false)
+  const [clearConfirmText, setClearConfirmText] = useState('')
+  const [selectedDeleteType, setSelectedDeleteType] = useState('expense')
+  const [selectedDeleteId, setSelectedDeleteId] = useState('')
+  const [deletingSpecificItem, setDeletingSpecificItem] = useState(false)
   const [groupNameDraft, setGroupNameDraft] = useState('')
   const [savingGroupName, setSavingGroupName] = useState(false)
   const addExpenseInFlightRef = useRef(false)
@@ -223,10 +233,13 @@ export default function GroupHome() {
           setGroup(data.group)
           setGroupNameDraft(data.group.name || '')
           setMembers(data.members)
-          setUsersById(data.usersById)
-          setExpenses(data.expenses)
-          setBalances(data.smartBalances)
-          setTelegramConnected(Boolean(data.group.telegram_connected))
+            setUsersById(data.usersById)
+            setExpenses(data.expenses)
+            setPayments(data.payments || [])
+            setActivityEvents(data.activityEvents || [])
+            setBalances(data.smartBalances)
+            setTelegramConnected(Boolean(data.group.telegram_connected))
+
         setTelegramGroupName(data.group.telegram_group_name || null)
         if (data.group.telegram_settings) {
           setTelegramSettings({
@@ -325,6 +338,42 @@ export default function GroupHome() {
   const allSettled = myBalances.length === 0
   const debtReminder = balances.find((balance) => balance.from === user.id)
   const isOwner = group.created_by === user.id
+
+  const expenseDeleteOptions = expenses.slice(0, 25).map((expense) => {
+    const paidBy = usersById[expense.paid_by]
+    return {
+      id: expense.id,
+      label: `${expense.description} · ${formatMoney(expense.amount, expense.original_currency || group.base_currency)}`,
+      meta: `${paidBy?.display_name || 'Unknown'} · ${timeAgo(expense.created_at)}`,
+    }
+  })
+
+  const paymentDeleteOptions = payments.slice(0, 25).map((payment) => {
+    const fromUser = usersById[payment.from_user_id]
+    const toUser = usersById[payment.to_user_id]
+    return {
+      id: payment.id,
+      label: `${fromUser?.display_name || 'Member'} → ${toUser?.display_name || 'Member'} · ${formatMoney(payment.amount, group.base_currency)}`,
+      meta: `${timeAgo(payment.created_at)}`,
+    }
+  })
+
+  const eventDeleteOptions = activityEvents.slice(0, 25).map((event) => {
+    const actor = usersById[event.actor_user_id]
+    return {
+      id: event.id,
+      label: `${event.event_type.replaceAll('_', ' ')} · ${actor?.display_name || 'Member'}`,
+      meta: `${timeAgo(event.created_at)}`,
+    }
+  })
+
+  const optionsByType = {
+    expense: expenseDeleteOptions,
+    payment: paymentDeleteOptions,
+    event: eventDeleteOptions,
+  }
+
+  const selectedTypeOptions = optionsByType[selectedDeleteType] || []
 
   const handlePay = (balance) => {
     navigate(`/groups/${id}/pay?from=${balance.from}&to=${balance.to}&amount=${balance.amount}`)
@@ -469,6 +518,54 @@ export default function GroupHome() {
       showToast(error.message || 'Unable to update group name', 'error')
     } finally {
       setSavingGroupName(false)
+    }
+  }
+
+  const handleClearActivity = async () => {
+    if (!group || clearingActivity) return
+
+    const normalized = clearConfirmText.trim().toUpperCase()
+    if (normalized !== 'CLEAR') {
+      showToast('Type CLEAR to confirm', 'error')
+      return
+    }
+
+    setClearingActivity(true)
+    try {
+      await clearGroupActivity({ groupId: group.id, confirmationText: normalized })
+      showToast('Group activity cleared', 'success')
+      setShowClearConfirmSheet(false)
+      setShowMenu(false)
+      setClearConfirmText('')
+      await loadGroup()
+    } catch (error) {
+      showToast(error.message || 'Unable to clear activity', 'error')
+    } finally {
+      setClearingActivity(false)
+    }
+  }
+
+  const handleDeleteSpecificItem = async () => {
+    if (!group || deletingSpecificItem) return
+    if (!selectedDeleteId) {
+      showToast('Choose an item to delete', 'error')
+      return
+    }
+
+    setDeletingSpecificItem(true)
+    try {
+      await deleteGroupActivityItem({
+        groupId: group.id,
+        itemType: selectedDeleteType,
+        itemId: selectedDeleteId,
+      })
+      showToast('Activity item deleted', 'success')
+      setSelectedDeleteId('')
+      await loadGroup()
+    } catch (error) {
+      showToast(error.message || 'Unable to delete item', 'error')
+    } finally {
+      setDeletingSpecificItem(false)
     }
   }
 
@@ -638,27 +735,42 @@ export default function GroupHome() {
             <span className="font-semibold text-gray-800 text-sm">Edit group name</span>
           </button>
 
-          <button
-            onClick={() => {
-              setShowMenu(false)
-              navigate(`/groups/${id}/insights`)
-            }}
-            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
-          >
-            <span className="text-xl w-8 text-center">📊</span>
-            <span className="font-semibold text-gray-800 text-sm">Insights</span>
-          </button>
+            <button
+              onClick={() => {
+                setShowMenu(false)
+                navigate(`/groups/${id}/insights`)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+            >
+              <span className="text-xl w-8 text-center">📊</span>
+              <span className="font-semibold text-gray-800 text-sm">Insights</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setShowMenu(false)
-              setShowTelegramSheet(true)
-            }}
-            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
-          >
-            <span className="text-xl w-8 text-center">💬</span>
-            <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
-          </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false)
+                  setShowClearConfirmSheet(true)
+                  setClearConfirmText('')
+                }}
+                disabled={clearingActivity}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-amber-50 text-left disabled:opacity-60"
+              >
+                <span className="text-xl w-8 text-center">🧹</span>
+                <span className="font-semibold text-amber-700 text-sm">{clearingActivity ? 'Clearing activity...' : 'Clear group activity'}</span>
+              </button>
+
+
+            <button
+              onClick={() => {
+                setShowMenu(false)
+                setShowTelegramSheet(true)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+            >
+              <span className="text-xl w-8 text-center">💬</span>
+              <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
+            </button>
+
 
           <button
             onClick={handleDeleteGroup}
@@ -678,38 +790,121 @@ export default function GroupHome() {
         </div>
       </BottomSheet>
 
-      <BottomSheet isOpen={showEditGroupNameSheet} onClose={() => setShowEditGroupNameSheet(false)} title="Edit group name">
-        <div className="px-5 py-4 pb-8 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Group name</label>
-            <input
-              type="text"
-              value={groupNameDraft}
-              onChange={(e) => setGroupNameDraft(e.target.value)}
-              maxLength={80}
-              placeholder="Enter group name"
-              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
-            />
+        <BottomSheet isOpen={showEditGroupNameSheet} onClose={() => setShowEditGroupNameSheet(false)} title="Edit group name">
+          <div className="px-5 py-4 pb-8 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Group name</label>
+              <input
+                type="text"
+                value={groupNameDraft}
+                onChange={(e) => setGroupNameDraft(e.target.value)}
+                maxLength={80}
+                placeholder="Enter group name"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowEditGroupNameSheet(false)}
+                className="flex-1 py-3 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveGroupName}
+                disabled={savingGroupName}
+                className="flex-1 py-3 rounded-full bg-emerald-500 text-white font-bold text-sm disabled:opacity-60"
+              >
+                {savingGroupName ? 'Saving...' : 'Save'}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowEditGroupNameSheet(false)}
-              className="flex-1 py-3 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveGroupName}
-              disabled={savingGroupName}
-              className="flex-1 py-3 rounded-full bg-emerald-500 text-white font-bold text-sm disabled:opacity-60"
-            >
-              {savingGroupName ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
-      </BottomSheet>
+        </BottomSheet>
 
-      <ConnectTelegramSheet
+        <BottomSheet isOpen={showClearConfirmSheet} onClose={() => setShowClearConfirmSheet(false)} title="Clear group activity">
+          <div className="px-5 py-4 pb-8 space-y-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Danger zone</p>
+              <p className="text-sm text-amber-800">Type <span className="font-black">CLEAR</span> to wipe all expenses, payments, and activity events in this group.</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Confirmation text</label>
+              <input
+                type="text"
+                value={clearConfirmText}
+                onChange={(e) => setClearConfirmText(e.target.value)}
+                placeholder="Type CLEAR"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-transparent transition"
+              />
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Delete specific item instead</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'expense', label: 'Expense' },
+                  { key: 'payment', label: 'Payment' },
+                  { key: 'event', label: 'Event' },
+                ].map((type) => (
+                  <button
+                    key={type.key}
+                    onClick={() => {
+                      setSelectedDeleteType(type.key)
+                      setSelectedDeleteId('')
+                    }}
+                    className={`py-2 rounded-xl border text-xs font-semibold transition ${
+                      selectedDeleteType === type.key
+                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 text-gray-600'
+                    }`}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+
+              <select
+                value={selectedDeleteId}
+                onChange={(e) => setSelectedDeleteId(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              >
+                <option value="">Select a {selectedDeleteType} to delete</option>
+                {selectedTypeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label} ({option.meta})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={handleDeleteSpecificItem}
+                disabled={deletingSpecificItem || !selectedDeleteId}
+                className="w-full py-3 rounded-full border border-red-200 text-red-600 font-semibold text-sm disabled:opacity-60"
+              >
+                {deletingSpecificItem ? 'Deleting item...' : 'Delete selected item'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => setShowClearConfirmSheet(false)}
+                className="flex-1 py-3 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearActivity}
+                disabled={clearingActivity || clearConfirmText.trim().toUpperCase() !== 'CLEAR'}
+                className="flex-1 py-3 rounded-full bg-amber-500 text-white font-bold text-sm disabled:opacity-60"
+              >
+                {clearingActivity ? 'Clearing...' : 'Clear all'}
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
+
+        <ConnectTelegramSheet
+
 
           isOpen={showTelegramSheet}
           onClose={() => setShowTelegramSheet(false)}

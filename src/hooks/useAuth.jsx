@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const AUTH_INIT_TIMEOUT_MS = 15000
-const PROFILE_LOAD_TIMEOUT_MS = 15000
+const PROFILE_LOAD_TIMEOUT_MS = 25000
 const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
 function isRecoverableAuthLockError(error) {
@@ -32,6 +32,10 @@ function withTimeout(promise, ms, errorMessage) {
   return Promise.race([promise, timeoutPromise]).finally(() => {
     window.clearTimeout(timeoutId)
   })
+}
+
+function isProfileTimeoutError(error) {
+  return String(error?.message || '').toLowerCase().includes('profile loading timed out')
 }
 
 function fallbackName(user) {
@@ -75,19 +79,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
 
-  const loadProfile = useCallback(async (nextUser) => {
+  const loadProfile = useCallback(async (nextUser, { softTimeout = false } = {}) => {
     if (!nextUser?.id) {
       setProfile(null)
       return null
     }
 
-    const nextProfile = await withTimeout(
-      ensureProfileRow(nextUser),
-      PROFILE_LOAD_TIMEOUT_MS,
-      'Profile loading timed out. Please refresh or sign in again.'
-    )
-    setProfile(nextProfile)
-    return nextProfile
+    try {
+      const nextProfile = await withTimeout(
+        ensureProfileRow(nextUser),
+        PROFILE_LOAD_TIMEOUT_MS,
+        'Profile loading timed out. Please refresh or sign in again.'
+      )
+      setProfile(nextProfile)
+      return nextProfile
+    } catch (error) {
+      if (softTimeout && isProfileTimeoutError(error)) {
+        const fallbackProfile = {
+          id: nextUser.id,
+          display_name: fallbackName(nextUser),
+          email: nextUser.email,
+          avatar_url: null,
+          avatar_color: null,
+          paynow_number: null,
+          paylah_handle: null,
+        }
+        setProfile(fallbackProfile)
+        return fallbackProfile
+      }
+      throw error
+    }
   }, [])
 
   useEffect(() => {
@@ -108,9 +129,10 @@ export function AuthProvider({ children }) {
         setUser(currentSession?.user ?? null)
         setAuthError(null)
 
-        if (currentSession?.user) {
-          await loadProfile(currentSession.user)
-        }
+          if (currentSession?.user) {
+            await loadProfile(currentSession.user, { softTimeout: true })
+          }
+
       })
       .catch((error) => {
         console.error('Failed to initialize auth session', error)
@@ -125,16 +147,17 @@ export function AuthProvider({ children }) {
       setSession(nextSession)
       setUser(nextSession?.user ?? null)
 
-      if (nextSession?.user) {
-        try {
-          await loadProfile(nextSession.user)
-          setAuthError(null)
-        } catch (error) {
-          console.error('Failed to refresh profile after auth state change', error)
-          setProfile(null)
-          setAuthError(error.message || 'Unable to load your profile. Please sign in again.')
-        }
-      } else {
+        if (nextSession?.user) {
+          try {
+            await loadProfile(nextSession.user, { softTimeout: true })
+            setAuthError(null)
+          } catch (error) {
+            console.error('Failed to refresh profile after auth state change', error)
+            setProfile(null)
+            setAuthError(error.message || 'Unable to load your profile. Please sign in again.')
+          }
+        } else {
+
         setProfile(null)
         setAuthError(null)
       }

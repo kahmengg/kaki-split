@@ -443,24 +443,29 @@ export async function deleteGroup({ groupId, userId }) {
   return data
 }
 
-export async function updateGroupName({ groupId, name }) {
-  const nextName = String(name || '').trim()
-  if (!groupId) throw new Error('Group is required')
-  if (!nextName) throw new Error('Group name is required')
-
+async function getSessionAccessToken(errorMessage) {
   const {
     data: { session },
     error: sessionError,
   } = await withAuthLockRetry(() => supabase.auth.getSession())
 
   if (sessionError) throw sessionError
-  if (!session?.access_token) throw new Error('Please sign in again to edit group name')
+  if (!session?.access_token) throw new Error(errorMessage)
+  return session.access_token
+}
+
+export async function updateGroupName({ groupId, name }) {
+  const nextName = String(name || '').trim()
+  if (!groupId) throw new Error('Group is required')
+  if (!nextName) throw new Error('Group name is required')
+
+  const accessToken = await getSessionAccessToken('Please sign in again to edit group name')
 
   const response = await fetch('/api/groups/update-name', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ groupId, name: nextName }),
   })
@@ -471,6 +476,61 @@ export async function updateGroupName({ groupId, name }) {
   }
 
   return payload?.group || null
+}
+
+export async function clearGroupActivity({ groupId, confirmationText }) {
+  if (!groupId) throw new Error('Group is required')
+
+  const normalizedConfirmation = String(confirmationText || '').trim().toUpperCase()
+  if (normalizedConfirmation !== 'CLEAR') {
+    throw new Error('Type CLEAR to confirm')
+  }
+
+  const accessToken = await getSessionAccessToken('Please sign in again to clear activity')
+
+  const response = await fetch('/api/groups/clear-activity', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ groupId, confirmationText: normalizedConfirmation }),
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to clear activity')
+  }
+
+  return payload || { ok: true }
+}
+
+export async function deleteGroupActivityItem({ groupId, itemType, itemId }) {
+  if (!groupId) throw new Error('Group is required')
+  if (!itemId) throw new Error('Item is required')
+
+  const normalizedType = String(itemType || '').trim().toLowerCase()
+  if (!['expense', 'payment', 'event'].includes(normalizedType)) {
+    throw new Error('Invalid activity item type')
+  }
+
+  const accessToken = await getSessionAccessToken('Please sign in again to delete this item')
+
+  const response = await fetch('/api/groups/delete-activity-item', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ groupId, itemType: normalizedType, itemId }),
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to delete this activity item')
+  }
+
+  return payload || { ok: true }
 }
 
 export async function createTelegramLinkToken({ groupId, createdBy }) {
@@ -866,6 +926,15 @@ export async function fetchGroupData({ groupId, userId = null }) {
 
   if (paymentsError) throw paymentsError
 
+  const { data: activityEvents, error: activityEventsError } = await supabase
+    .from('activity_events')
+    .select('id,group_id,actor_user_id,event_type,payload,created_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(30)
+
+  if (activityEventsError) throw activityEventsError
+
   const memberIds = members.map((member) => member.id)
   const splitsByExpenseId = groupBy(splits, (split) => split.expense_id)
 
@@ -910,11 +979,14 @@ export async function fetchGroupData({ groupId, userId = null }) {
     },
     members,
     usersById,
-    expenses: mergedExpenses,
-    smartBalances,
-    myBalances,
-  }
+      expenses: mergedExpenses,
+      payments: payments || [],
+      activityEvents: activityEvents || [],
+      smartBalances,
+      myBalances,
+    }
 }
+
 
 export async function addExpense({
   groupId,
