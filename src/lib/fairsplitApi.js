@@ -443,6 +443,36 @@ export async function deleteGroup({ groupId, userId }) {
   return data
 }
 
+export async function updateGroupName({ groupId, name }) {
+  const nextName = String(name || '').trim()
+  if (!groupId) throw new Error('Group is required')
+  if (!nextName) throw new Error('Group name is required')
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await withAuthLockRetry(() => supabase.auth.getSession())
+
+  if (sessionError) throw sessionError
+  if (!session?.access_token) throw new Error('Please sign in again to edit group name')
+
+  const response = await fetch('/api/groups/update-name', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ groupId, name: nextName }),
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to update group name')
+  }
+
+  return payload?.group || null
+}
+
 export async function createTelegramLinkToken({ groupId, createdBy }) {
   if (!groupId || !createdBy) throw new Error('Group and user are required')
 

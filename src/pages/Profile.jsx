@@ -6,6 +6,14 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { removeAvatar, saveProfile, uploadAvatar } from '../lib/fairsplitApi'
 
+function normalizeSingaporePhone(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (digits.startsWith('65') && digits.length > 8) {
+    return digits.slice(2)
+  }
+  return digits
+}
+
 export default function Profile() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
@@ -23,10 +31,11 @@ export default function Profile() {
   useEffect(() => {
     if (!profile) return
     setName(profile.display_name || '')
-    setPaynow(profile.paynow_number || '')
+    const oauthPhone = user?.phone || user?.user_metadata?.phone_number || user?.user_metadata?.phone || ''
+    setPaynow(normalizeSingaporePhone(profile.paynow_number || oauthPhone))
     setPaylah(profile.paylah_handle || '')
     setAvatarUrl(profile.avatar_url || '')
-  }, [profile])
+  }, [profile, user?.phone])
 
   const profileUser = useMemo(
     () => ({
@@ -44,15 +53,18 @@ export default function Profile() {
 
     setSaving(true)
     try {
-      await saveProfile({
-        userId: user.id,
-        profile: {
-          display_name: name.trim() || user.email?.split('@')[0] || 'User',
-          paynow_number: paynow.trim() || null,
-          paylah_handle: paylah.trim() || null,
-          avatar_url: avatarUrl || null,
-        },
-      })
+        const normalizedPaynow = normalizeSingaporePhone(paynow)
+
+        await saveProfile({
+          userId: user.id,
+          profile: {
+            display_name: name.trim() || user.email?.split('@')[0] || 'User',
+            paynow_number: normalizedPaynow || null,
+            paylah_handle: paylah.trim() || null,
+            avatar_url: avatarUrl || null,
+          },
+        })
+
       await refreshProfile()
       showToast('Saved!', 'success')
     } catch (error) {
@@ -198,13 +210,17 @@ export default function Profile() {
                 <span className="w-5 h-5 bg-red-50 rounded-lg flex items-center justify-center text-sm">📱</span>
                 PayNow number
               </label>
-              <input
-                type="tel"
-                value={paynow}
-                onChange={(event) => setPaynow(event.target.value)}
-                placeholder="+65 XXXX XXXX"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
-              />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={paynow}
+                  onChange={(event) => setPaynow(normalizeSingaporePhone(event.target.value).slice(0, 8))}
+                  placeholder="91234567"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-400 mt-1 ml-1">Enter 8-digit Singapore mobile number</p>
+
             </div>
 
             <div>

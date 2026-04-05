@@ -13,6 +13,7 @@ import {
   disconnectTelegramConnection,
   fetchGroupData,
   fetchTelegramLinkToken,
+  updateGroupName,
   updateTelegramSettings,
 } from '../lib/fairsplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
@@ -178,8 +179,11 @@ export default function GroupHome() {
   const [showQuickSplit, setShowQuickSplit] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showTelegramSheet, setShowTelegramSheet] = useState(false)
+  const [showEditGroupNameSheet, setShowEditGroupNameSheet] = useState(false)
   const [showReminderBanner, setShowReminderBanner] = useState(true)
   const [deletingGroup, setDeletingGroup] = useState(false)
+  const [groupNameDraft, setGroupNameDraft] = useState('')
+  const [savingGroupName, setSavingGroupName] = useState(false)
   const addExpenseInFlightRef = useRef(false)
 
   const [telegramConnected, setTelegramConnected] = useState(false)
@@ -211,12 +215,13 @@ export default function GroupHome() {
         }
 
 
-        setGroup(data.group)
-        setMembers(data.members)
-        setUsersById(data.usersById)
-        setExpenses(data.expenses)
-        setBalances(data.smartBalances)
-        setTelegramConnected(Boolean(data.group.telegram_connected))
+          setGroup(data.group)
+          setGroupNameDraft(data.group.name || '')
+          setMembers(data.members)
+          setUsersById(data.usersById)
+          setExpenses(data.expenses)
+          setBalances(data.smartBalances)
+          setTelegramConnected(Boolean(data.group.telegram_connected))
         setTelegramGroupName(data.group.telegram_group_name || null)
         if (data.group.telegram_settings) {
           setTelegramSettings({
@@ -434,6 +439,34 @@ export default function GroupHome() {
     }
   }
 
+  const handleSaveGroupName = async () => {
+    if (!group?.id || savingGroupName) return
+
+    const trimmed = groupNameDraft.trim()
+    if (!trimmed) {
+      showToast('Group name cannot be empty', 'error')
+      return
+    }
+
+    if (trimmed === group.name) {
+      setShowEditGroupNameSheet(false)
+      return
+    }
+
+    setSavingGroupName(true)
+    try {
+      const updated = await updateGroupName({ groupId: group.id, name: trimmed })
+      setGroup((prev) => (prev ? { ...prev, name: updated?.name || trimmed } : prev))
+      setGroupNameDraft(updated?.name || trimmed)
+      showToast('Group name updated', 'success')
+      setShowEditGroupNameSheet(false)
+    } catch (error) {
+      showToast(error.message || 'Unable to update group name', 'error')
+    } finally {
+      setSavingGroupName(false)
+    }
+  }
+
   const handleDeleteGroup = async () => {
     if (!group || !isOwner || deletingGroup) return
 
@@ -577,6 +610,18 @@ export default function GroupHome() {
 
           <button
             onClick={() => {
+              setGroupNameDraft(group.name || '')
+              setShowMenu(false)
+              setShowEditGroupNameSheet(true)
+            }}
+            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+          >
+            <span className="text-xl w-8 text-center">✏️</span>
+            <span className="font-semibold text-gray-800 text-sm">Edit group name</span>
+          </button>
+
+          <button
+            onClick={() => {
               setShowMenu(false)
               navigate(`/groups/${id}/insights`)
             }}
@@ -586,37 +631,68 @@ export default function GroupHome() {
             <span className="font-semibold text-gray-800 text-sm">Insights</span>
           </button>
 
-            <button
-              onClick={() => {
-                setShowMenu(false)
-                setShowTelegramSheet(true)
-              }}
-              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
-            >
-              <span className="text-xl w-8 text-center">💬</span>
-              <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
-            </button>
+          <button
+            onClick={() => {
+              setShowMenu(false)
+              setShowTelegramSheet(true)
+            }}
+            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+          >
+            <span className="text-xl w-8 text-center">💬</span>
+            <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
+          </button>
 
-              <button
-                onClick={handleDeleteGroup}
-                disabled={!isOwner || deletingGroup}
-                className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left disabled:opacity-60 ${
-                  isOwner ? 'hover:bg-red-50' : 'hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-xl w-8 text-center">🗑️</span>
-                <div className="min-w-0">
-                  <span className={`font-semibold text-sm ${isOwner ? 'text-red-600' : 'text-gray-500'}`}>
-                    {isOwner ? (deletingGroup ? 'Deleting group...' : 'Delete group') : 'Delete group (owner only)'}
-                  </span>
-                  {!isOwner && <p className="text-xs text-gray-400 mt-0.5">Ask the group owner to delete this group.</p>}
-                </div>
-              </button>
+          <button
+            onClick={handleDeleteGroup}
+            disabled={!isOwner || deletingGroup}
+            className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left disabled:opacity-60 ${
+              isOwner ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+            }`}
+          >
+            <span className="text-xl w-8 text-center">🗑️</span>
+            <div className="min-w-0">
+              <span className={`font-semibold text-sm ${isOwner ? 'text-red-600' : 'text-gray-500'}`}>
+                {isOwner ? (deletingGroup ? 'Deleting group...' : 'Delete group') : 'Delete group (owner only)'}
+              </span>
+              {!isOwner && <p className="text-xs text-gray-400 mt-0.5">Ask the group owner to delete this group.</p>}
             </div>
-          </BottomSheet>
+          </button>
+        </div>
+      </BottomSheet>
 
+      <BottomSheet isOpen={showEditGroupNameSheet} onClose={() => setShowEditGroupNameSheet(false)} title="Edit group name">
+        <div className="px-5 py-4 pb-8 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Group name</label>
+            <input
+              type="text"
+              value={groupNameDraft}
+              onChange={(e) => setGroupNameDraft(e.target.value)}
+              maxLength={80}
+              placeholder="Enter group name"
+              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowEditGroupNameSheet(false)}
+              className="flex-1 py-3 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveGroupName}
+              disabled={savingGroupName}
+              className="flex-1 py-3 rounded-full bg-emerald-500 text-white font-bold text-sm disabled:opacity-60"
+            >
+              {savingGroupName ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
-        <ConnectTelegramSheet
+      <ConnectTelegramSheet
+
           isOpen={showTelegramSheet}
           onClose={() => setShowTelegramSheet(false)}
           groupName={group.name}

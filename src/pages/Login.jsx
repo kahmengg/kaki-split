@@ -91,7 +91,7 @@ export default function Login() {
             <div className="flex items-center gap-3">
               <div className="h-11 w-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-lg shadow-sm">KS</div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/80 font-semibold">Fair split made easy</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/80 font-semibold">Split bills in seconds</p>
                 <p className="text-lg font-bold leading-tight text-slate-900">KakiSplit</p>
               </div>
             </div>
