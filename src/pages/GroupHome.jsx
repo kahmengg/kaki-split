@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import BottomSheet from '../components/BottomSheet'
+import ThemeToggle from '../components/ThemeToggle'
 import QuickSplit from './QuickSplit'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
@@ -18,8 +19,9 @@ import {
 } from '../lib/fairsplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 
-function ExpenseRow({ expense, usersById, currentUserId }) {
+function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
   const paidBy = usersById[expense.paid_by]
+  const expenseCurrency = expense.original_currency || groupBaseCurrency || 'SGD'
 
   return (
     <div className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0">
@@ -30,7 +32,7 @@ function ExpenseRow({ expense, usersById, currentUserId }) {
             <p className="font-semibold text-gray-900 text-sm truncate">{expense.description}</p>
             <p className="text-gray-400 text-xs mt-0.5 truncate">paid by {paidBy?.id === currentUserId ? 'You' : paidBy?.display_name || 'Unknown'}</p>
           </div>
-          <p className="font-bold text-gray-900 text-sm text-right flex-shrink-0">{formatMoney(expense.amount)}</p>
+          <p className="font-bold text-gray-900 text-sm text-right flex-shrink-0">{formatMoney(expense.amount, expenseCurrency)}</p>
         </div>
         <p className="text-gray-400 text-xs mt-1">{timeAgo(expense.created_at)}</p>
       </div>
@@ -38,7 +40,7 @@ function ExpenseRow({ expense, usersById, currentUserId }) {
   )
 }
 
-function SmartBalanceCard({ balance, usersById, currentUserId, onPay }) {
+function SmartBalanceCard({ balance, usersById, currentUserId, onPay, currency }) {
   const fromUser = usersById[balance.from]
   const toUser = usersById[balance.to]
   const iOwe = balance.from === currentUserId
@@ -51,10 +53,13 @@ function SmartBalanceCard({ balance, usersById, currentUserId, onPay }) {
       <div className="flex items-center gap-3 min-w-0">
         <Avatar user={iOwe ? toUser : fromUser} size="md" />
         <div className="min-w-0">
-          <p className="font-bold text-gray-900 text-sm truncate">
-            {iOwe ? `You owe ${toUser?.display_name || 'member'}` : `${fromUser?.display_name || 'Member'} owes you ${formatMoney(balance.amount)}`}
-          </p>
-          {iOwe && <p className="font-black text-lg text-red-500">{formatMoney(balance.amount)}</p>}
+            <p className="font-bold text-gray-900 text-sm truncate">
+              {iOwe
+                ? `You owe ${toUser?.display_name || 'member'}`
+                : `${fromUser?.display_name || 'Member'} owes you ${formatMoney(balance.amount, currency || 'SGD')}`}
+            </p>
+            {iOwe && <p className="font-black text-lg text-red-500">{formatMoney(balance.amount, currency || 'SGD')}</p>}
+
         </div>
       </div>
 
@@ -492,24 +497,27 @@ export default function GroupHome() {
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-4 border-b border-gray-100">
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => navigate('/dashboard')} className="text-gray-500 -ml-1">
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-black text-gray-900 truncate">{group.name}</h1>
-            <p className="text-gray-400 text-xs">
-              {members.length} members · {formatMoney(group.total_spent)} total
-            </p>
+          <div className="flex items-center gap-3 mb-4">
+            <button onClick={() => navigate('/dashboard')} className="text-gray-500 -ml-1">
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-black text-gray-900 truncate">{group.name}</h1>
+                <p className="text-gray-400 text-xs">
+                  {members.length} members · {formatMoney(group.total_spent, group.base_currency)} total
+                </p>
+
+            </div>
+            <ThemeToggle className="px-2.5" />
+            <button onClick={() => setShowMenu(true)} className="text-gray-400 p-1">
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+                <path d="M12 6a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4z" />
+              </svg>
+            </button>
           </div>
-          <button onClick={() => setShowMenu(true)} className="text-gray-400 p-1">
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
-              <path d="M12 6a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4z" />
-            </svg>
-          </button>
-        </div>
+
 
         <div className="flex items-center gap-1.5 flex-wrap">
           {members.map((member) => (
@@ -532,12 +540,13 @@ export default function GroupHome() {
             <button onClick={() => setShowReminderBanner(false)} className="absolute top-2 right-2 text-amber-500 text-xs" aria-label="Dismiss reminder">
               ✕
             </button>
-            <p className="text-amber-800 text-xs font-medium leading-relaxed">
-              {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you — you owe {formatMoney(debtReminder.amount)} in {group.name} ·{' '}
-              <button onClick={() => handlePay(debtReminder)} className="text-emerald-600 font-bold">
-                Pay now →
-              </button>
-            </p>
+              <p className="text-amber-800 text-xs font-medium leading-relaxed">
+                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you — you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} ·{' '}
+                <button onClick={() => handlePay(debtReminder)} className="text-emerald-600 font-bold">
+                  Pay now →
+                </button>
+              </p>
+
           </div>
         )}
 
@@ -552,13 +561,15 @@ export default function GroupHome() {
           ) : (
             <div className="space-y-2">
                 {myBalances.map((balance) => (
-                  <SmartBalanceCard
-                    key={`${balance.from}-${balance.to}`}
-                    balance={balance}
-                    usersById={usersById}
-                    currentUserId={user.id}
-                    onPay={handlePay}
-                  />
+                    <SmartBalanceCard
+                      key={`${balance.from}-${balance.to}`}
+                      balance={balance}
+                      usersById={usersById}
+                      currentUserId={user.id}
+                      onPay={handlePay}
+                      currency={group.base_currency}
+                    />
+
                 ))}
 
             </div>
@@ -579,9 +590,16 @@ export default function GroupHome() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 px-4">
-              {expenses.map((expense) => (
-                <ExpenseRow key={expense.id} expense={expense} usersById={usersById} currentUserId={user.id} />
-              ))}
+                {expenses.map((expense) => (
+                  <ExpenseRow
+                    key={expense.id}
+                    expense={expense}
+                    usersById={usersById}
+                    currentUserId={user.id}
+                    groupBaseCurrency={group.base_currency}
+                  />
+                ))}
+
             </div>
           )}
         </div>

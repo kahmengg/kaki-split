@@ -4,6 +4,7 @@ import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
+import ThemeToggle from '../components/ThemeToggle'
 import { removeAvatar, saveProfile, uploadAvatar } from '../lib/fairsplitApi'
 
 function normalizeSingaporePhone(value) {
@@ -128,10 +129,14 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
-      <div className="bg-white px-5 pt-12 pb-6 border-b border-gray-100">
-        <h1 className="text-2xl font-black text-gray-900 mb-4">Profile</h1>
+        <div className="bg-white px-5 pt-12 pb-6 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-black text-gray-900">Profile</h1>
+            <ThemeToggle />
+          </div>
 
-        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
+
           <div className="relative">
             <Avatar user={profileUser} size="xl" />
             <button onClick={handleAvatarPick} className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import BottomSheet from '../components/BottomSheet'
+import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { createGroup, fetchDashboardData } from '../lib/fairsplitApi'
@@ -137,13 +138,24 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-5 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-black text-gray-900">Hi, {currentUser?.display_name || currentUser?.name || 'Friend'} 👋</h1>
-            <p className="text-gray-500 text-sm mt-0.5">Here's your expense overview</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-black text-gray-900">Hi, {currentUser?.display_name || currentUser?.name || 'Friend'} 👋</h1>
+              <p className="text-gray-500 text-sm mt-0.5">Here's your expense overview</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <button
+                onClick={() => navigate('/profile')}
+                className="rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                aria-label="Open profile"
+                title="Open profile"
+              >
+                <Avatar user={currentUser} size="lg" />
+              </button>
+            </div>
           </div>
-          <Avatar user={currentUser} size="lg" />
-        </div>
+
 
         <div className="flex gap-3 mt-2">
           {totalOwe > 0 && (

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
+import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { fetchDashboardData } from '../lib/fairsplitApi'
@@ -88,17 +89,21 @@ export default function Activity() {
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/dashboard')} className="text-gray-500 -ml-1" aria-label="Back to dashboard">
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-black text-gray-900">Activity</h1>
-            <p className="text-gray-500 text-xs">Recent updates across your groups</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate('/dashboard')} className="text-gray-500 -ml-1" aria-label="Back to dashboard">
+                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-black text-gray-900">Activity</h1>
+                <p className="text-gray-500 text-xs">Recent updates across your groups</p>
+              </div>
+            </div>
+            <ThemeToggle />
           </div>
-        </div>
+
       </div>
 
       <div className="px-4 pt-5">
