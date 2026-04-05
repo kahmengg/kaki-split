@@ -8,7 +8,6 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import {
   addExpense,
-  createNudge,
   createTelegramLinkToken,
   deleteGroup,
   disconnectTelegramConnection,
@@ -17,78 +16,6 @@ import {
   updateTelegramSettings,
 } from '../lib/fairsplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
-
-const NUDGE_PRESETS = [
-  'Time to pay up! 🍩',
-  'My wallet is lonely 🥺',
-  'Debt collectors are coming! 🦖',
-]
-
-function NudgeSheet({ isOpen, onClose, targetUser, onSend }) {
-  const [selected, setSelected] = useState(null)
-  const [custom, setCustom] = useState('')
-  const [sending, setSending] = useState(false)
-
-  const handleSend = async () => {
-    const message = custom.trim() || selected
-    if (!message) return
-    setSending(true)
-    try {
-      await onSend(message)
-      setSelected(null)
-      setCustom('')
-      onClose()
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Send a Nudge">
-      <div className="px-5 pt-2 pb-8 space-y-4">
-        <p className="text-sm text-gray-500">
-          Nudging <span className="font-semibold text-gray-800">{targetUser?.display_name || 'member'}</span>
-        </p>
-
-        <div className="space-y-2">
-          {NUDGE_PRESETS.map((preset) => (
-            <button
-              key={preset}
-              onClick={() => { setSelected(preset); setCustom('') }}
-              className={`w-full text-left px-4 py-3 rounded-2xl border-2 text-sm font-medium transition-all ${
-                selected === preset && !custom
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                  : 'border-gray-100 bg-gray-50 text-gray-700'
-              }`}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wide block mb-1.5">Custom message</label>
-          <input
-            type="text"
-            value={custom}
-            onChange={(e) => { setCustom(e.target.value); setSelected(null) }}
-            placeholder="Write your own nudge..."
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
-          />
-        </div>
-
-        <button
-          onClick={handleSend}
-          disabled={sending || (!selected && !custom.trim())}
-          className="w-full py-4 bg-emerald-500 text-white rounded-full font-bold text-sm active:scale-95 transition-transform disabled:opacity-50"
-          style={{ boxShadow: '0 4px 16px rgba(16,185,129,0.3)' }}
-        >
-          {sending ? 'Sending…' : '👋 Send Nudge'}
-        </button>
-      </div>
-    </BottomSheet>
-  )
-}
 
 function ExpenseRow({ expense, usersById, currentUserId }) {
   const paidBy = usersById[expense.paid_by]
@@ -110,7 +37,7 @@ function ExpenseRow({ expense, usersById, currentUserId }) {
   )
 }
 
-function SmartBalanceCard({ balance, usersById, currentUserId, onPay, onNudge }) {
+function SmartBalanceCard({ balance, usersById, currentUserId, onPay }) {
   const fromUser = usersById[balance.from]
   const toUser = usersById[balance.to]
   const iOwe = balance.from === currentUserId
@@ -130,21 +57,13 @@ function SmartBalanceCard({ balance, usersById, currentUserId, onPay, onNudge })
         </div>
       </div>
 
-      {iOwe ? (
+      {iOwe && (
         <button
           onClick={() => onPay(balance)}
           className="px-4 py-2 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform"
           style={{ boxShadow: '0 2px 10px rgba(16,185,129,0.35)' }}
         >
           Pay
-        </button>
-      ) : (
-        <button
-          onClick={() => onNudge(balance)}
-          className="px-4 py-2 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform"
-          style={{ boxShadow: '0 2px 10px rgba(16,185,129,0.35)' }}
-        >
-          Nudge
         </button>
       )}
     </div>
@@ -260,7 +179,6 @@ export default function GroupHome() {
   const [showMenu, setShowMenu] = useState(false)
   const [showTelegramSheet, setShowTelegramSheet] = useState(false)
   const [showReminderBanner, setShowReminderBanner] = useState(true)
-  const [nudgeBalance, setNudgeBalance] = useState(null)
   const [deletingGroup, setDeletingGroup] = useState(false)
   const addExpenseInFlightRef = useRef(false)
 
@@ -400,22 +318,6 @@ export default function GroupHome() {
 
   const handlePay = (balance) => {
     navigate(`/groups/${id}/pay?from=${balance.from}&to=${balance.to}&amount=${balance.amount}`)
-  }
-
-  const handleNudgeOpen = (balance) => {
-    setNudgeBalance(balance)
-  }
-
-  const handleNudgeSend = async (message) => {
-    if (!nudgeBalance) return
-    try {
-      await createNudge({ groupId: group.id, fromUserId: user.id, toUserId: nudgeBalance.from, amount: nudgeBalance.amount, message })
-      const debtor = usersById[nudgeBalance.from]
-      showToast(`Nudge sent to ${debtor?.display_name || 'member'} 👋`, 'success')
-    } catch (error) {
-      showToast(error.message || 'Unable to send nudge', 'error')
-      throw error
-    }
   }
 
   const handleAddExpense = async (payload) => {
@@ -616,16 +518,16 @@ export default function GroupHome() {
             </div>
           ) : (
             <div className="space-y-2">
-              {myBalances.map((balance) => (
-                <SmartBalanceCard
-                  key={`${balance.from}-${balance.to}`}
-                  balance={balance}
-                  usersById={usersById}
-                  currentUserId={user.id}
-                  onPay={handlePay}
-                  onNudge={handleNudgeOpen}
-                />
-              ))}
+                {myBalances.map((balance) => (
+                  <SmartBalanceCard
+                    key={`${balance.from}-${balance.to}`}
+                    balance={balance}
+                    usersById={usersById}
+                    currentUserId={user.id}
+                    onPay={handlePay}
+                  />
+                ))}
+
             </div>
           )}
         </div>
@@ -731,13 +633,7 @@ export default function GroupHome() {
           onRefreshCode={handleRefreshTelegramCode}
         />
 
+      </div>
 
-      <NudgeSheet
-        isOpen={Boolean(nudgeBalance)}
-        onClose={() => setNudgeBalance(null)}
-        targetUser={nudgeBalance ? usersById[nudgeBalance.from] : null}
-        onSend={handleNudgeSend}
-      />
-    </div>
   )
 }

@@ -1001,17 +1001,6 @@ export async function addExpense({
   return expense
 }
 
-export async function createNudge({ groupId, fromUserId, toUserId, amount, message }) {
-  const { error } = await supabase.from('nudges').insert({
-    group_id: groupId,
-    from_user_id: fromUserId,
-    to_user_id: toUserId,
-    message: message || `Reminder: ${round2(amount).toFixed(2)} is due`,
-  })
-
-  if (error) throw error
-}
-
 export async function recordPayment({ groupId, fromUserId, toUserId, amount, createdBy }) {
   const paymentAmount = round2(amount)
   if (paymentAmount <= 0) throw new Error('Payment amount must be greater than 0')
