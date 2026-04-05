@@ -37,66 +37,23 @@ function toPendingRetryTimestamp() {
   return new Date(Date.now() + 2 * 60 * 1000).toISOString()
 }
 
-function toOutboxMessageRow(row) {
-  const payload = row.payload || {}
+const DEFAULT_APP_URL = 'https://kaki-split.vercel.app'
 
-  if (row.event_type === 'expense_added') {
-    return {
-      type: 'expense',
-      text: `• 🧾 ${payload.description || 'Expense'} · ${round2(payload.amount || 0).toFixed(2)}`,
-      amount: round2(payload.amount || 0),
-      createdAt: row.created_at,
-    }
+function getAppUrl() {
+  const configuredUrl = String(
+    process.env.APP_URL || process.env.WEB_APP_URL || process.env.NEXT_PUBLIC_APP_URL || ''
+  ).trim()
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/+$/, '')
   }
 
-  if (row.event_type === 'payment_recorded') {
-    return {
-      type: 'payment',
-      text: `• 💸 Payment recorded · ${round2(payload.amount || 0).toFixed(2)}`,
-      amount: round2(payload.amount || 0),
-      createdAt: row.created_at,
-    }
+  const vercelUrl = String(process.env.VERCEL_URL || '').trim()
+  if (vercelUrl) {
+    return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
   }
 
-  return null
-}
-
-function buildDigestMessage(rows) {
-  const normalizedRows = rows
-    .map(toOutboxMessageRow)
-    .filter(Boolean)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-
-  if (normalizedRows.length === 0) return null
-
-  const expenseRows = normalizedRows.filter((row) => row.type === 'expense')
-  const paymentRows = normalizedRows.filter((row) => row.type === 'payment')
-  const expenseTotal = round2(expenseRows.reduce((sum, row) => sum + row.amount, 0))
-  const paymentTotal = round2(paymentRows.reduce((sum, row) => sum + row.amount, 0))
-
-  const lines = ['📬 KakiSplit updates']
-
-  if (expenseRows.length > 0) {
-    lines.push(`🧾 ${expenseRows.length} expense${expenseRows.length > 1 ? 's' : ''} added (${expenseTotal.toFixed(2)} total)`)
-  }
-
-  if (paymentRows.length > 0) {
-    lines.push(`💸 ${paymentRows.length} payment${paymentRows.length > 1 ? 's' : ''} recorded (${paymentTotal.toFixed(2)} total)`)
-  }
-
-  lines.push('')
-  lines.push('Latest activity:')
-
-  const previewRows = normalizedRows.slice(-5)
-  for (const row of previewRows) {
-    lines.push(row.text)
-  }
-
-  if (normalizedRows.length > previewRows.length) {
-    lines.push(`• +${normalizedRows.length - previewRows.length} more update${normalizedRows.length - previewRows.length > 1 ? 's' : ''}`)
-  }
-
-  return lines.join('\n')
+  return DEFAULT_APP_URL
 }
 
 function shouldDisableConnection(sendResult) {
@@ -229,11 +186,11 @@ export async function handleTelegramWebhook({ botToken, update }) {
 
   if (groupUpdateError) throw groupUpdateError
 
-  await sendTelegramMessage({
-    botToken,
-    chatId: chat.id,
-    text: '✅ KakiSplit connected. We send a daily reminder with an updates summary once per day.',
-  })
+    await sendTelegramMessage({
+      botToken,
+      chatId: chat.id,
+      text: '✅ KakiSplit connected. We send a daily unsettled-balance reminder once per day.',
+    })
 
   return { ok: true, linkedGroupId: linkToken.group_id }
 }
@@ -498,66 +455,31 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
       const net = computeNetBalances({ memberIds, expenses: expenses || [], splitsByExpenseId, payments: payments || [] })
       const smartBalances = settleNetBalances(net)
 
-      const { data: pendingActivityRows, error: pendingActivityError } = await adminSupabase
-        .from('telegram_outbox')
-        .select('id,event_type,payload,created_at')
-        .eq('group_id', row.group_id)
-        .eq('status', 'pending')
-        .in('event_type', ['expense_added', 'payment_recorded'])
-        .order('created_at', { ascending: true })
-        .limit(100)
+      if (smartBalances.length > 0) {
+        const userIds = [...new Set(smartBalances.flatMap((item) => [item.from, item.to]))]
+        const { data: profiles, error: profileError } = await adminSupabase
+          .from('profiles')
+          .select('id,display_name,email')
+          .in('id', userIds)
 
-      if (pendingActivityError) throw pendingActivityError
+        if (profileError) throw profileError
 
-      const activityDigestMessage = buildDigestMessage(pendingActivityRows || [])
-      if ((pendingActivityRows || []).length > 0) {
-        const { error: markActivityRowsSentError } = await adminSupabase
-          .from('telegram_outbox')
-          .update({ status: 'sent', sent_at: now.toISOString(), error_message: null })
-          .in(
-            'id',
-            (pendingActivityRows || []).map((activityRow) => activityRow.id)
-          )
+        const profileById = new Map(
+          (profiles || []).map((profile) => [profile.id, profile.display_name || String(profile.email || '').split('@')[0] || 'Member'])
+        )
 
-        if (markActivityRowsSentError) throw markActivityRowsSentError
-      }
+        const lines = smartBalances.slice(0, 5).map((item) => {
+          const fromName = profileById.get(item.from) || 'Member'
+          const toName = profileById.get(item.to) || 'Member'
+          return `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)}`
+        })
 
-      if (smartBalances.length > 0 || activityDigestMessage) {
-        let lines = []
-
-        if (smartBalances.length > 0) {
-          const userIds = [...new Set(smartBalances.flatMap((item) => [item.from, item.to]))]
-          const { data: profiles, error: profileError } = await adminSupabase
-            .from('profiles')
-            .select('id,display_name,email')
-            .in('id', userIds)
-
-          if (profileError) throw profileError
-
-          const profileById = new Map(
-            (profiles || []).map((profile) => [profile.id, profile.display_name || String(profile.email || '').split('@')[0] || 'Member'])
-          )
-
-          lines = smartBalances.slice(0, 5).map((item) => {
-            const fromName = profileById.get(item.from) || 'Member'
-            const toName = profileById.get(item.to) || 'Member'
-            return `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)}`
-          })
+        if (smartBalances.length > 5) {
+          lines.push(`• +${smartBalances.length - 5} more unsettled balance${smartBalances.length - 5 > 1 ? 's' : ''}`)
         }
 
-        const messageLines = [`⏰ Daily reminder for ${group.name}`]
-
-        if (smartBalances.length > 0) {
-          messageLines.push(`${smartBalances.length} unsettled balance${smartBalances.length > 1 ? 's' : ''} remaining:`)
-          messageLines.push(...lines)
-        } else {
-          messageLines.push('No unsettled balances right now.')
-        }
-
-        if (activityDigestMessage) {
-          messageLines.push('')
-          messageLines.push(activityDigestMessage)
-        }
+        const appUrl = getAppUrl()
+        const messageLines = ['Unsettled balances:', ...lines, '', `Settle up in app: ${appUrl}/groups/${group.id}`]
 
         const { error: outboxError } = await adminSupabase.from('telegram_outbox').insert({
           group_id: row.group_id,
@@ -572,6 +494,7 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
         if (outboxError) throw outboxError
         queued += 1
       }
+
 
     const { error: updateError } = await adminSupabase
       .from('telegram_connections')

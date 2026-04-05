@@ -9,21 +9,6 @@ const socialProof = [
   { label: 'Payment disputes', value: '-78%' },
 ]
 
-const productHighlights = [
-  {
-    title: 'Smart expense splits',
-    description: 'Split equally, by shares, or exact amounts without doing manual math.',
-  },
-  {
-    title: 'Auto reminders in Telegram',
-    description: 'Nudges go to your group chat so everyone sees what is still unsettled.',
-  },
-  {
-    title: 'Clear debt simplification',
-    description: 'See the fewest transfers needed to settle up quickly.',
-  },
-]
-
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -86,10 +71,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-cyan-50 text-slate-900 relative overflow-hidden">
       {loading && loadingSource === 'google' && (
-        <div className="absolute inset-0 z-30 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center px-6">
-          <div className="bg-white rounded-3xl px-6 py-5 border border-gray-200 shadow-xl text-center max-w-xs w-full">
+        <div className="absolute inset-0 z-30 bg-white/75 backdrop-blur-sm flex items-center justify-center px-6">
+          <div className="bg-white rounded-3xl px-6 py-5 border border-emerald-100 shadow-xl text-center max-w-xs w-full">
             <div className="w-9 h-9 mx-auto border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
             <p className="text-sm font-semibold text-gray-900 mt-3">Opening Google sign-in...</p>
             <p className="text-xs text-gray-500 mt-1">You'll be redirected in a moment.</p>
@@ -97,64 +82,56 @@ export default function Login() {
         </div>
       )}
 
-      <div className="absolute -top-16 -right-12 h-56 w-56 rounded-full bg-emerald-400/20 blur-2xl" />
-      <div className="absolute top-48 -left-20 h-64 w-64 rounded-full bg-cyan-400/10 blur-2xl" />
-      <div className="absolute bottom-20 right-0 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl" />
+      <div className="absolute -top-16 -right-12 h-56 w-56 rounded-full bg-emerald-300/40 blur-2xl" />
+      <div className="absolute top-48 -left-20 h-64 w-64 rounded-full bg-cyan-300/35 blur-2xl" />
+      <div className="absolute bottom-20 right-0 h-56 w-56 rounded-full bg-sky-300/35 blur-3xl" />
 
-      <div className="relative z-10 px-5 pt-8 pb-8 space-y-5">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-2xl bg-white text-emerald-600 flex items-center justify-center font-black text-lg shadow-sm">KS</div>
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-200/80 font-semibold">Fair split made easy</p>
-              <p className="text-lg font-bold leading-tight">KakiSplit</p>
+        <div className="relative z-10 px-5 pt-6 pb-6 space-y-4">
+          <header className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-lg shadow-sm">KS</div>
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/80 font-semibold">Fair split made easy</p>
+                <p className="text-lg font-bold leading-tight text-slate-900">KakiSplit</p>
+              </div>
             </div>
-          </div>
-          <span className="text-[11px] font-semibold text-emerald-100 bg-white/10 border border-white/15 px-2.5 py-1 rounded-full">Trusted by friend groups</span>
-        </header>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-white/90 border border-emerald-100 px-2.5 py-1 rounded-full">Trusted by friend groups</span>
+          </header>
 
-        <section className="space-y-4">
-          <h1 className="text-3xl font-black leading-tight tracking-tight">
-            Keep trips fun.
-            <span className="block text-emerald-300">Track every dollar fairly.</span>
-          </h1>
-            <p className="text-sm text-slate-200 leading-6">
-              Built for roommates, travel squads, and kakis. Add expenses in seconds, auto-calculate balances,
-              and settle without awkward reminders.
+          <section className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 shadow-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-[11px] font-semibold tracking-wide text-emerald-700">Split fast. Settle cleanly.</span>
+            </div>
+
+            <h1 className="text-[1.8rem] font-black leading-tight tracking-tight text-slate-900">
+              Keep trips fun.
+              <span className="block text-emerald-600">No awkward money chasing.</span>
+            </h1>
+
+            <p className="text-sm text-slate-600 leading-6">
+              Built for roommates and travel squads. Add expenses in seconds, auto-calculate balances,
+              and settle up with clarity.
             </p>
+
             {pendingInviteCode && (
-              <div className="rounded-2xl border border-emerald-200/60 bg-emerald-300/10 px-3 py-2">
-                <p className="text-xs text-emerald-100 font-semibold">You were invited to a group</p>
-                <p className="text-[11px] text-emerald-200 mt-0.5">Sign in and we will join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <p className="text-xs text-emerald-700 font-semibold">You were invited to a group</p>
+                <p className="text-[11px] text-emerald-700/80 mt-0.5">Sign in and we will join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
               </div>
             )}
 
-
-          <div className="grid grid-cols-3 gap-2.5">
-            {socialProof.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center backdrop-blur-sm">
-                <p className="text-base font-black text-white">{item.value}</p>
-                <p className="text-[11px] text-slate-200 mt-1">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur-md p-4 space-y-3">
-          {productHighlights.map((item, index) => (
-            <div key={item.title} className={`flex gap-3 ${index !== productHighlights.length - 1 ? 'pb-3 border-b border-white/10' : ''}`}>
-              <div className="h-6 w-6 shrink-0 rounded-full bg-emerald-400/20 border border-emerald-300/50 mt-0.5 flex items-center justify-center text-emerald-200 text-xs font-bold">
-                {index + 1}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">{item.title}</p>
-                <p className="text-xs text-slate-200 mt-0.5 leading-5">{item.description}</p>
-              </div>
+            <div className="grid grid-cols-3 gap-2">
+              {socialProof.map((item) => (
+                <div key={item.label} className="rounded-xl border border-emerald-100 bg-white px-2.5 py-2 text-center shadow-sm">
+                  <p className="text-sm font-black text-slate-900 leading-tight">{item.value}</p>
+                  <p className="text-[10px] text-slate-500 mt-1 leading-tight">{item.label}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </section>
+          </section>
 
-        <section className="rounded-[28px] bg-white text-gray-900 border border-white/70 shadow-[0_18px_40px_rgba(2,6,23,0.25)] p-5">
+        <section className="rounded-[28px] bg-white/95 text-gray-900 border border-emerald-100 shadow-[0_18px_40px_rgba(16,185,129,0.12)] p-5 backdrop-blur-sm">
           <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
             <button
               onClick={() => setMode('login')}
