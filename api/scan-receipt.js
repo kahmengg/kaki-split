@@ -94,7 +94,7 @@ Rules:
 - If an item has no clear price, omit it.
 - tax and service_charge are separate from items — do not include them in the items array.
 - total should be the final amount paid including tax and service charge.
-- If you cannot read the receipt clearly, return { "error": "unreadable" }
+- If you cannot read the receipt clearly, return { "error": "unreadable" }`
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
