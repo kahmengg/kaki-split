@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
 import AppLogo from '../components/AppLogo'
 import { useToast } from '../components/Toast'
@@ -245,7 +245,18 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-gray-400 mt-4">By continuing, you agree to our Terms and Privacy Policy.</p>
+            <p className="text-center text-xs text-gray-400 mt-4">
+              By continuing, you agree to our{' '}
+              <Link to="/terms" className="font-semibold text-sky-600 hover:text-sky-700">
+                Terms
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" className="font-semibold text-sky-600 hover:text-sky-700">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+
         </section>
       </div>
     </div>

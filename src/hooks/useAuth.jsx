@@ -11,14 +11,25 @@ function isRecoverableAuthLockError(error) {
   return message.includes('auth token was released because another request stole it') || message.includes('lockmanager')
 }
 
-async function withAuthLockRetry(operation) {
-  try {
-    return await operation()
-  } catch (error) {
-    if (!isRecoverableAuthLockError(error)) throw error
-    await new Promise((resolve) => window.setTimeout(resolve, 250))
-    return operation()
+async function withAuthLockRetry(operation, { attempts = 6, baseDelayMs = 120 } = {}) {
+  let lastError = null
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (!isRecoverableAuthLockError(error)) throw error
+      lastError = error
+
+      if (attempt === attempts - 1) break
+
+      const backoff = baseDelayMs * (attempt + 1)
+      const jitter = Math.floor(Math.random() * 100)
+      await new Promise((resolve) => window.setTimeout(resolve, backoff + jitter))
+    }
   }
+
+  throw lastError
 }
 
 function withTimeout(promise, ms, errorMessage) {

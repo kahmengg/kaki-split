@@ -11,6 +11,8 @@ import TripSummary from './pages/TripSummary'
 import Activity from './pages/Activity'
 import Profile from './pages/Profile'
 import JoinInvite from './pages/JoinInvite'
+import Terms from './pages/Terms'
+import Privacy from './pages/Privacy'
 
 function RequireAuth({ children }) {
   const { user, loading, session } = useAuth()
@@ -63,14 +65,17 @@ export default function App() {
     <ToastProvider>
       <BrowserRouter>
         <Routes>
-          <Route
-            path="/login"
-            element={
-              <PublicOnly>
-                <Login />
-              </PublicOnly>
-            }
-          />
+            <Route
+              path="/login"
+              element={
+                <PublicOnly>
+                  <Login />
+                </PublicOnly>
+              }
+            />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+
 
             <Route
               path="/dashboard"
