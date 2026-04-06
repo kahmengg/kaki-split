@@ -166,7 +166,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
 
   return (
     <div className="flex flex-col">
-      <div className="bg-gradient-to-br from-sky-50 to-teal-50 px-5 py-6 text-center">
+        <div className="bg-sky-50 border-b border-sky-100 px-5 py-6 text-center">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Amount</p>
         <div className="flex items-center justify-center gap-2">
           <button onClick={() => setShowCurrency((value) => !value)} className="text-sky-600 font-bold text-2xl">
