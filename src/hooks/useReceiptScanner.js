@@ -33,11 +33,13 @@ export function useReceiptScanner() {
 
       const data = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(data?.error || 'scan_failed')
+        const serverMessage = [data?.error, data?.details].filter(Boolean).join(': ')
+        throw new Error(serverMessage || 'scan_failed')
       }
 
       if (data?.error) {
-        throw new Error(data.error)
+        const serverMessage = [data?.error, data?.details].filter(Boolean).join(': ')
+        throw new Error(serverMessage)
       }
 
       return data

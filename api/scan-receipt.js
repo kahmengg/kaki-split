@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+
 function parseJsonFromModelText(text) {
   const raw = String(text || '').trim()
   if (!raw) throw new Error('empty_response')
@@ -107,35 +109,45 @@ Rules:
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    let lastError = null
 
-    const result = await model.generateContent([
-      {
-        text: prompt,
-      },
-      {
-        inlineData: {
-          mimeType,
-          data: imageBase64,
-        },
-      },
-    ])
+    for (const modelName of RECEIPT_MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName })
+        const result = await model.generateContent([
+          {
+            text: prompt,
+          },
+          {
+            inlineData: {
+              mimeType,
+              data: imageBase64,
+            },
+          },
+        ])
 
-    const text = result.response.text()
-    const parsed = parseJsonFromModelText(text)
-    const normalized = normalizeReceipt(parsed)
+        const text = result.response.text()
+        const parsed = parseJsonFromModelText(text)
+        const normalized = normalizeReceipt(parsed)
 
-    if (normalized.error) {
-      res.status(200).json(normalized)
-      return
+        if (normalized.error) {
+          res.status(200).json(normalized)
+          return
+        }
+
+        if (!Number.isFinite(normalized.total) || normalized.total <= 0) {
+          res.status(200).json({ error: 'unreadable' })
+          return
+        }
+
+        res.status(200).json(normalized)
+        return
+      } catch (error) {
+        lastError = error
+      }
     }
 
-    if (!Number.isFinite(normalized.total) || normalized.total <= 0) {
-      res.status(200).json({ error: 'unreadable' })
-      return
-    }
-
-    res.status(200).json(normalized)
+    throw lastError || new Error('all_models_failed')
   } catch (error) {
     console.error('Receipt scan error:', error)
     res.status(500).json({
