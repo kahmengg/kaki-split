@@ -7,11 +7,18 @@ function parseJsonFromModelText(text) {
   const codeFenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
   const candidate = (codeFenceMatch?.[1] || raw).trim()
 
-  const firstBrace = candidate.indexOf('{')
-  const lastBrace = candidate.lastIndexOf('}')
-  const jsonLike = firstBrace >= 0 && lastBrace > firstBrace ? candidate.slice(firstBrace, lastBrace + 1) : candidate
+  try {
+    return JSON.parse(candidate)
+  } catch {
+    const firstBrace = candidate.indexOf('{')
+    const lastBrace = candidate.lastIndexOf('}')
+    const jsonLike =
+      firstBrace >= 0 && lastBrace > firstBrace
+        ? candidate.slice(firstBrace, lastBrace + 1)
+        : candidate
 
-  return JSON.parse(jsonLike)
+    return JSON.parse(jsonLike)
+  }
 }
 
 function round2(value) {
@@ -94,14 +101,18 @@ Rules:
 - If an item has no clear price, omit it.
 - tax and service_charge are separate from items — do not include them in the items array.
 - total should be the final amount paid including tax and service charge.
-- If you cannot read the receipt clearly, return { "error": "unreadable" }`
+- If you cannot read the receipt clearly, return { "error": "unreadable" }
+- Do not include trailing commas in JSON.
+- Do not include comments in JSON.`
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     const result = await model.generateContent([
-      prompt,
+      {
+        text: prompt,
+      },
       {
         inlineData: {
           mimeType,
@@ -127,6 +138,9 @@ Rules:
     res.status(200).json(normalized)
   } catch (error) {
     console.error('Receipt scan error:', error)
-    res.status(500).json({ error: 'parse_failed' })
+    res.status(500).json({
+      error: 'parse_failed',
+      details: error instanceof Error ? error.message : 'unknown_error',
+    })
   }
 }
