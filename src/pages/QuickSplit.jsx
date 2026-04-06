@@ -35,8 +35,16 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
   const [showAssigner, setShowAssigner] = useState(false)
   const fileInputRef = useRef(null)
   const amountRef = useRef(null)
+  const paidBySectionRef = useRef(null)
   const submitInFlightRef = useRef(false)
   const { scanReceipt, scanning, error: scanError, setError: setScanError } = useReceiptScanner()
+
+  const focusPaidBySelection = () => {
+    window.setTimeout(() => {
+      const target = paidBySectionRef.current?.querySelector(`[data-paid-by="${paidBy}"]`)
+      if (target instanceof HTMLElement) target.focus()
+    }, 120)
+  }
 
   useEffect(() => {
     window.setTimeout(() => amountRef.current?.focus(), 100)
@@ -177,7 +185,24 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
     const data = await scanReceipt(file)
     event.target.value = ''
 
-    if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+    if (!data) return
+
+    const scannedTotal = Number(data.total || 0)
+    const scannedCurrency = String(data.currency || '').trim().toUpperCase()
+    const scannedMerchant = String(data.merchant || '').trim()
+
+    if (Number.isFinite(scannedTotal) && scannedTotal > 0) {
+      setAmount(String(round2(scannedTotal)))
+    }
+    if (scannedCurrency) {
+      setCurrency(scannedCurrency)
+    }
+    if (scannedMerchant && !description.trim()) {
+      setDescription(scannedMerchant)
+    }
+
+    if (!Array.isArray(data.items) || data.items.length === 0) {
+      focusPaidBySelection()
       return
     }
 
@@ -205,6 +230,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
     )
 
     setShowAssigner(false)
+    focusPaidBySelection()
   }
 
   return (
@@ -316,13 +342,16 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
           </div>
         </div>
 
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Paid by</p>
-          <div className="flex gap-2 flex-wrap">
-            {members.map((member) => (
-              <button
-                key={member.id}
-                onClick={() => setPaidBy(member.id)}
+          <div ref={paidBySectionRef}>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Paid by</p>
+            <div className="flex gap-2 flex-wrap">
+              {members.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  data-paid-by={member.id}
+                  onClick={() => setPaidBy(member.id)}
+
                 className={`flex items-center gap-2 px-3 py-2 rounded-2xl border-2 transition-all ${
                   paidBy === member.id ? 'border-sky-500 bg-sky-50' : 'border-gray-200 bg-white'
                 }`}
