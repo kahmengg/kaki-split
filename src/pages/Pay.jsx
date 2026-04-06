@@ -4,7 +4,7 @@ import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { fetchGroupData, recordPayment } from '../lib/fairsplitApi'
+import { fetchGroupData, recordPayment } from '../lib/kakiSplitApi'
 import { formatMoney } from '../lib/format'
 
 function InlineToast({ message, visible }) {
@@ -18,7 +18,7 @@ function InlineToast({ message, visible }) {
         ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3'}
       `}
     >
-      <span className="text-emerald-400 text-base">✓</span>
+      <span className="text-sky-400 text-base">✓</span>
       <span className="text-sm font-semibold">{message}</span>
     </div>
   )
@@ -160,7 +160,7 @@ export default function PayScreen() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
       </div>
     )
   }
@@ -170,7 +170,7 @@ export default function PayScreen() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6 text-center">
         <div>
           <p className="text-gray-600 font-semibold">Payment details are incomplete.</p>
-          <button onClick={() => navigate(`/groups/${id}`)} className="mt-4 px-4 py-2.5 rounded-full bg-emerald-500 text-white text-sm font-bold">
+          <button onClick={() => navigate(`/groups/${id}`)} className="mt-4 px-4 py-2.5 rounded-full bg-sky-500 text-white text-sm font-bold">
             Back to group
           </button>
         </div>
@@ -182,7 +182,7 @@ export default function PayScreen() {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
         <div className="text-center">
-          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-4xl">✅</span>
           </div>
           <h2 className="text-2xl font-black text-gray-900 mb-2">Paid!</h2>
@@ -216,7 +216,7 @@ export default function PayScreen() {
             </div>
 
             <div className="flex flex-col items-center gap-1 flex-1 px-4">
-              <div className={`font-black text-2xl ${iOwe ? 'text-red-500' : 'text-emerald-600'}`}>{formatMoney(amountFromQuery)}</div>
+              <div className={`font-black text-2xl ${iOwe ? 'text-red-500' : 'text-sky-600'}`}>{formatMoney(amountFromQuery)}</div>
               <div className="flex items-center gap-1 w-full">
                 <div className="h-px flex-1 bg-gray-200" />
                 <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -233,7 +233,7 @@ export default function PayScreen() {
             </div>
           </div>
 
-          <button onClick={() => setShowPartial((value) => !value)} className="w-full text-center text-sm text-emerald-600 font-medium">
+          <button onClick={() => setShowPartial((value) => !value)} className="w-full text-center text-sm text-sky-600 font-medium">
             {showPartial ? '← Pay full amount' : 'Pay partial amount'}
           </button>
 
@@ -245,7 +245,7 @@ export default function PayScreen() {
                 value={partial}
                 onChange={(event) => setPartial(event.target.value.replace(/[^0-9.]/g, ''))}
                 placeholder={`0.00 (max ${amountFromQuery.toFixed(2)})`}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-center font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-center font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
             </div>
           )}
@@ -270,8 +270,8 @@ export default function PayScreen() {
 
             <button
               onClick={handlePayNowAndPayLah}
-              className="w-full py-4 bg-emerald-500 text-white rounded-full font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              style={{ boxShadow: '0 4px 16px rgba(16,185,129,0.35)' }}
+              className="w-full py-4 bg-sky-500 text-white rounded-full font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              style={{ boxShadow: '0 4px 16px rgba(14,165,233,0.35)' }}
             >
               <span>📋</span>
               Copy PayNow &amp; Open PayLah!
@@ -300,7 +300,7 @@ export default function PayScreen() {
                 <button onClick={() => setShowConfirm(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-full font-bold text-sm">
                   Cancel
                 </button>
-                <button onClick={handleMarkPaid} disabled={recording} className="flex-1 py-3 bg-emerald-500 text-white rounded-full font-bold text-sm disabled:opacity-60">
+                <button onClick={handleMarkPaid} disabled={recording} className="flex-1 py-3 bg-sky-500 text-white rounded-full font-bold text-sm disabled:opacity-60">
                   {recording ? 'Recording...' : 'Confirm'}
                 </button>
               </div>

@@ -5,7 +5,7 @@ import BottomNav from '../components/BottomNav'
 import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { fetchDashboardData } from '../lib/fairsplitApi'
+import { fetchDashboardData } from '../lib/kakiSplitApi'
 import { formatMoney, timeAgo } from '../lib/format'
 
 function ActivityGroupRow({ group, usersById, onOpen }) {
@@ -34,8 +34,8 @@ function ActivityGroupRow({ group, usersById, onOpen }) {
             </>
           ) : (
             <>
-              <p className="text-emerald-600 font-bold text-sm">+{formatMoney(balance, group.base_currency)}</p>
-              <p className="text-emerald-500 text-xs">owed to you</p>
+              <p className="text-sky-600 font-bold text-sm">+{formatMoney(balance, group.base_currency)}</p>
+              <p className="text-sky-500 text-xs">owed to you</p>
             </>
           )}
         </div>
@@ -109,7 +109,7 @@ export default function Activity() {
       <div className="px-4 pt-5">
         {loading ? (
           <div className="py-14 flex justify-center">
-            <div className="w-9 h-9 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
           </div>
         ) : groups.length === 0 ? (
           <div className="text-center py-16 px-6">
@@ -118,8 +118,8 @@ export default function Activity() {
             <p className="text-gray-500 text-sm mb-6">Create or join a group to start tracking expenses.</p>
             <button
               onClick={() => navigate('/dashboard')}
-              className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl font-bold"
-              style={{ boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)' }}
+              className="w-full py-3.5 bg-sky-500 text-white rounded-2xl font-bold"
+              style={{ boxShadow: '0 4px 16px rgba(14, 165, 233, 0.3)' }}
             >
               Go to dashboard
             </button>

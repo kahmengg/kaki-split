@@ -42,7 +42,7 @@ function fallbackName(user) {
   const fromMeta = user?.user_metadata?.display_name || user?.user_metadata?.full_name
   if (fromMeta && fromMeta.trim()) return fromMeta.trim()
   if (user?.email) return user.email.split('@')[0]
-  return 'KakiSplit User'
+  return 'Kaki Split User'
 }
 
 async function ensureProfileRow(user) {

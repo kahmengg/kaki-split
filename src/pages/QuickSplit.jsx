@@ -166,10 +166,10 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
 
   return (
     <div className="flex flex-col">
-      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 px-5 py-6 text-center">
+      <div className="bg-gradient-to-br from-sky-50 to-teal-50 px-5 py-6 text-center">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Amount</p>
         <div className="flex items-center justify-center gap-2">
-          <button onClick={() => setShowCurrency((value) => !value)} className="text-emerald-600 font-bold text-2xl">
+          <button onClick={() => setShowCurrency((value) => !value)} className="text-sky-600 font-bold text-2xl">
             {currency}
           </button>
             <input
@@ -186,7 +186,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
             />
         </div>
         {amount && splitMembers.length > 1 && splitType === 'equal' && (
-          <p className="text-emerald-600 text-sm font-medium mt-1">
+          <p className="text-sky-600 text-sm font-medium mt-1">
             {formatMoney(perPersonAmount, currency)} each · {splitMembers.length} people
           </p>
         )}
@@ -201,7 +201,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                   setShowCurrency(false)
                 }}
                 className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${
-                  currency === item.code ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white border-gray-200 text-gray-700'
+                  currency === item.code ? 'bg-sky-500 text-white border-sky-500' : 'bg-white border-gray-200 text-gray-700'
                 }`}
               >
                 {item.code}
@@ -218,7 +218,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="What was this for?"
-            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
           />
         </div>
 
@@ -230,11 +230,11 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                 key={item.id}
                 onClick={() => setCategory(item.id)}
                 className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl border-2 transition-all ${
-                  category === item.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'
+                  category === item.id ? 'border-sky-500 bg-sky-50' : 'border-gray-200 bg-white'
                 }`}
               >
                 <span className="text-xl">{item.icon}</span>
-                <span className={`text-[10px] font-semibold ${category === item.id ? 'text-emerald-700' : 'text-gray-500'}`}>{item.label}</span>
+                <span className={`text-[10px] font-semibold ${category === item.id ? 'text-sky-700' : 'text-gray-500'}`}>{item.label}</span>
               </button>
             ))}
           </div>
@@ -248,11 +248,11 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                 key={member.id}
                 onClick={() => setPaidBy(member.id)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-2xl border-2 transition-all ${
-                  paidBy === member.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'
+                  paidBy === member.id ? 'border-sky-500 bg-sky-50' : 'border-gray-200 bg-white'
                 }`}
               >
                 <Avatar user={member} size="xs" ring={paidBy === member.id} />
-                <span className={`text-sm font-semibold ${paidBy === member.id ? 'text-emerald-700' : 'text-gray-600'}`}>
+                <span className={`text-sm font-semibold ${paidBy === member.id ? 'text-sky-700' : 'text-gray-600'}`}>
                   {member.id === currentUserId ? 'You' : member.display_name}
                 </span>
               </button>
@@ -270,14 +270,14 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                   key={member.id}
                   onClick={() => toggleMember(member.id)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-2xl border-2 transition-all ${
-                    included ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white opacity-50'
+                    included ? 'border-sky-500 bg-sky-50' : 'border-gray-200 bg-white opacity-50'
                   }`}
                 >
                   <Avatar user={member} size="xs" />
-                  <span className={`text-sm font-semibold ${included ? 'text-emerald-700' : 'text-gray-500'}`}>
+                  <span className={`text-sm font-semibold ${included ? 'text-sky-700' : 'text-gray-500'}`}>
                     {member.id === currentUserId ? 'You' : member.display_name}
                   </span>
-                  {included && <span className="text-emerald-500 text-xs">✓</span>}
+                  {included && <span className="text-sky-500 text-xs">✓</span>}
                 </button>
               )
             })}
@@ -329,7 +329,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                         value={splitValues[member.id] || ''}
                         onChange={(event) => handleSplitValueChange(member.id, event.target.value)}
                         placeholder={splitType === 'exact' ? '0.00' : '0'}
-                        className="w-20 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm font-semibold text-right text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        className="w-20 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm font-semibold text-right text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
                       />
                       {splitType === 'percent' && <span className="text-xs text-gray-400">%</span>}
                     </div>
@@ -351,8 +351,8 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-base disabled:opacity-40 transition-opacity"
-            style={{ boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)' }}
+            className="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base disabled:opacity-40 transition-opacity"
+            style={{ boxShadow: '0 4px 16px rgba(14, 165, 233, 0.3)' }}
           >
             {submitting ? 'Adding expense...' : `Add expense ${amount ? `· ${formatMoney(parseFloat(amount) || 0, currency)}` : ''}`}
           </button>

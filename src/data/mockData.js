@@ -1,4 +1,4 @@
-// Mock data for KakiSplit frontend prototype
+// Mock data for Kaki Split frontend prototype
 
 export const CURRENT_USER = {
   id: 'user-1',

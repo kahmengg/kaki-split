@@ -5,7 +5,7 @@ import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import ThemeToggle from '../components/ThemeToggle'
-import { removeAvatar, saveProfile, uploadAvatar } from '../lib/fairsplitApi'
+import { removeAvatar, saveProfile, uploadAvatar } from '../lib/kakiSplitApi'
 
 function normalizeSingaporePhone(value) {
   const digits = String(value || '').replace(/\D/g, '')
@@ -139,7 +139,7 @@ export default function Profile() {
 
           <div className="relative">
             <Avatar user={profileUser} size="xl" />
-            <button onClick={handleAvatarPick} className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-white">
+            <button onClick={handleAvatarPick} className="absolute -bottom-1 -right-1 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center border-2 border-white">
               <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path
                   strokeLinecap="round"
@@ -158,7 +158,7 @@ export default function Profile() {
                 <button
                   onClick={handleAvatarPick}
                   disabled={uploading || removingAvatar}
-                  className="text-xs font-semibold text-emerald-600 disabled:opacity-60"
+                  className="text-xs font-semibold text-sky-600 disabled:opacity-60"
                 >
                   {uploading ? 'Uploading...' : 'Edit photo'}
                 </button>
@@ -190,7 +190,7 @@ export default function Profile() {
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
               />
             </div>
             <div>
@@ -222,7 +222,7 @@ export default function Profile() {
                   value={paynow}
                   onChange={(event) => setPaynow(normalizeSingaporePhone(event.target.value).slice(0, 8))}
                   placeholder="91234567"
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-400 mt-1 ml-1">Enter 8-digit Singapore mobile number</p>
 
@@ -238,7 +238,7 @@ export default function Profile() {
                 value={paylah}
                 onChange={(event) => setPaylah(event.target.value)}
                 placeholder="@username"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
               />
             </div>
 
@@ -248,8 +248,8 @@ export default function Profile() {
         <button
           onClick={handleSave}
           disabled={saving || uploading}
-          className="w-full py-4 rounded-full font-bold text-base transition-all bg-emerald-500 text-white disabled:opacity-60"
-          style={{ boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)' }}
+          className="w-full py-4 rounded-full font-bold text-base transition-all bg-sky-500 text-white disabled:opacity-60"
+          style={{ boxShadow: '0 4px 16px rgba(14, 165, 233, 0.3)' }}
         >
           {saving ? 'Saving...' : 'Save changes'}
         </button>
@@ -265,7 +265,7 @@ export default function Profile() {
           </button>
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">KakiSplit v1.0</p>
+        <p className="text-center text-xs text-gray-300 pb-2">Kaki Split v1.0</p>
       </div>
 
       <BottomNav onFABPress={() => navigate('/dashboard')} />

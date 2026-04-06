@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
+import AppLogo from '../components/AppLogo'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
@@ -74,48 +75,44 @@ export default function Login() {
   }
 
     return (
-      <div className={`min-h-screen relative overflow-hidden transition-colors ${isDark ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-slate-100' : 'bg-gradient-to-b from-emerald-50 via-white to-cyan-50 text-slate-900'}`}>
+      <div className={`min-h-screen relative overflow-hidden transition-colors ${isDark ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-slate-100' : 'bg-gradient-to-b from-sky-50 via-white to-cyan-50 text-slate-900'}`}>
         {loading && loadingSource === 'google' && (
           <div className={`absolute inset-0 z-30 backdrop-blur-sm flex items-center justify-center px-6 ${isDark ? 'bg-slate-950/70' : 'bg-white/75'}`}>
-            <div className={`rounded-3xl px-6 py-5 border text-center max-w-xs w-full ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-emerald-100 shadow-xl'}`}>
-              <div className="w-9 h-9 mx-auto border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+            <div className={`rounded-3xl px-6 py-5 border text-center max-w-xs w-full ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-sky-100 shadow-xl'}`}>
+              <div className="w-9 h-9 mx-auto border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
               <p className={`text-sm font-semibold mt-3 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Opening Google sign-in...</p>
               <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>You'll be redirected in a moment.</p>
             </div>
           </div>
         )}
 
-        <div className={`absolute -top-16 -right-12 h-56 w-56 rounded-full blur-2xl ${isDark ? 'bg-emerald-900/20' : 'bg-emerald-300/40'}`} />
+        <div className={`absolute -top-16 -right-12 h-56 w-56 rounded-full blur-2xl ${isDark ? 'bg-sky-900/20' : 'bg-sky-300/40'}`} />
         <div className={`absolute top-48 -left-20 h-64 w-64 rounded-full blur-2xl ${isDark ? 'bg-cyan-900/20' : 'bg-cyan-300/35'}`} />
         <div className={`absolute bottom-20 right-0 h-56 w-56 rounded-full blur-3xl ${isDark ? 'bg-sky-900/20' : 'bg-sky-300/35'}`} />
 
 
         <div className="relative z-10 px-5 pt-6 pb-6 space-y-4">
               <header className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-lg shadow-sm">KS</div>
-                  <div>
-                    <p className={`text-[11px] uppercase tracking-[0.18em] font-semibold ${isDark ? 'text-emerald-300/80' : 'text-emerald-700/80'}`}>Split bills in seconds</p>
-                    <p className={`text-lg font-bold leading-tight ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>KakiSplit</p>
-                  </div>
-                </div>
+              <div className="flex items-center gap-3">
+                <AppLogo size="md" showWordmark />
+              </div>
                 <div className="flex items-center gap-2">
                   <ThemeToggle className="px-2.5 py-1" />
-                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${isDark ? 'text-slate-300 bg-slate-800/80 border-slate-600' : 'text-emerald-700 bg-white/90 border-emerald-100'}`}>Trusted by friend groups</span>
+                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${isDark ? 'text-slate-300 bg-slate-800/80 border-slate-600' : 'text-sky-700 bg-white/90 border-sky-100'}`}>Trusted by friend groups</span>
                 </div>
               </header>
 
 
 
             <section className="space-y-3">
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${isDark ? 'border-emerald-700/70 bg-emerald-900/20' : 'border-emerald-200 bg-white shadow-sm'}`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span className={`text-[11px] font-semibold tracking-wide ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>Split fast. Settle cleanly.</span>
+              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${isDark ? 'border-sky-700/70 bg-sky-900/20' : 'border-sky-200 bg-white shadow-sm'}`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                <span className={`text-[11px] font-semibold tracking-wide ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>Split fast. Settle cleanly.</span>
               </div>
 
               <h1 className={`text-[1.8rem] font-black leading-tight tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
                 Keep trips fun.
-                <span className="block text-emerald-500">No awkward money chasing.</span>
+                <span className="block text-sky-500">No awkward money chasing.</span>
               </h1>
 
               <p className={`text-sm leading-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
@@ -124,15 +121,15 @@ export default function Login() {
               </p>
 
               {pendingInviteCode && (
-                <div className={`rounded-2xl border px-3 py-2 ${isDark ? 'border-emerald-700/70 bg-emerald-900/25' : 'border-emerald-200 bg-emerald-50'}`}>
-                  <p className={`text-xs font-semibold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>You were invited to a group</p>
-                  <p className={`text-[11px] mt-0.5 ${isDark ? 'text-emerald-300/80' : 'text-emerald-700/80'}`}>Sign in and we will join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
+                <div className={`rounded-2xl border px-3 py-2 ${isDark ? 'border-sky-700/70 bg-sky-900/25' : 'border-sky-200 bg-sky-50'}`}>
+                  <p className={`text-xs font-semibold ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>You were invited to a group</p>
+                  <p className={`text-[11px] mt-0.5 ${isDark ? 'text-sky-300/80' : 'text-sky-700/80'}`}>Sign in and we will join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
                 </div>
               )}
 
               <div className="grid grid-cols-3 gap-2">
                 {socialProof.map((item) => (
-                  <div key={item.label} className={`rounded-xl border px-2.5 py-2 text-center ${isDark ? 'border-slate-600 bg-slate-800' : 'border-emerald-100 bg-white shadow-sm'}`}>
+                  <div key={item.label} className={`rounded-xl border px-2.5 py-2 text-center ${isDark ? 'border-slate-600 bg-slate-800' : 'border-sky-100 bg-white shadow-sm'}`}>
                     <p className={`text-sm font-black leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</p>
                     <p className={`text-[10px] mt-1 leading-tight ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</p>
                   </div>
@@ -140,7 +137,7 @@ export default function Login() {
               </div>
             </section>
 
-          <section className={`rounded-[28px] text-gray-900 border p-5 backdrop-blur-sm ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white/95 border-emerald-100 shadow-[0_18px_40px_rgba(16,185,129,0.12)]'}`}>
+          <section className={`rounded-[28px] text-gray-900 border p-5 backdrop-blur-sm ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white/95 border-sky-100 shadow-[0_18px_40px_rgba(14,165,233,0.12)]'}`}>
 
           <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
             <button
@@ -197,7 +194,7 @@ export default function Login() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
-                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
+                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
                   required={mode === 'signup'}
                 />
               </div>
@@ -210,7 +207,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
                 required
               />
             </div>
@@ -222,7 +219,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
                 required
               />
             </div>
@@ -230,8 +227,8 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-700 transition-colors disabled:opacity-60 mt-1"
-              style={{ boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)' }}
+              className="w-full py-3.5 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 active:bg-sky-700 transition-colors disabled:opacity-60 mt-1"
+              style={{ boxShadow: '0 8px 20px rgba(14, 165, 233, 0.3)' }}
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

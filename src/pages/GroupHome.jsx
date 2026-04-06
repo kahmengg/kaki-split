@@ -18,7 +18,7 @@ import {
   fetchTelegramLinkToken,
   updateGroupName,
   updateTelegramSettings,
-} from '../lib/fairsplitApi'
+} from '../lib/kakiSplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 
 function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
@@ -51,7 +51,7 @@ function SmartBalanceCard({ balance, usersById, currentUserId, onPay, currency }
   if (!iOwe && !owedToMe) return null
 
   return (
-    <div className={`flex items-center justify-between p-4 rounded-2xl border ${iOwe ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+    <div className={`flex items-center justify-between p-4 rounded-2xl border ${iOwe ? 'bg-red-50 border-red-100' : 'bg-sky-50 border-sky-100'}`}>
       <div className="flex items-center gap-3 min-w-0">
         <Avatar user={iOwe ? toUser : fromUser} size="md" />
         <div className="min-w-0">
@@ -68,8 +68,8 @@ function SmartBalanceCard({ balance, usersById, currentUserId, onPay, currency }
       {iOwe && (
         <button
           onClick={() => onPay(balance)}
-          className="px-4 py-2 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform"
-          style={{ boxShadow: '0 2px 10px rgba(16,185,129,0.35)' }}
+          className="px-4 py-2 rounded-full bg-sky-500 text-white font-bold text-sm active:scale-95 transition-transform"
+          style={{ boxShadow: '0 2px 10px rgba(14,165,233,0.35)' }}
         >
           Pay
         </button>
@@ -102,9 +102,9 @@ function ConnectTelegramSheet({
         {isConnected ? (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 leading-relaxed">Get expense updates and debt reminders in your group chat.</p>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
-              <p className="text-emerald-800 font-semibold text-sm">✅ Connected to {telegramGroupName}</p>
-              <p className="text-emerald-700 text-xs mt-1">Notifications are active for {groupName}.</p>
+            <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4">
+              <p className="text-sky-800 font-semibold text-sm">✅ Connected to {telegramGroupName}</p>
+              <p className="text-sky-700 text-xs mt-1">Notifications are active for {groupName}.</p>
             </div>
 
             <div className="space-y-2 rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
@@ -139,15 +139,15 @@ function ConnectTelegramSheet({
                       <p className="mb-2">
                         <span className="font-semibold">2.</span> Send this command in the group:
                       </p>
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-5 text-center">
-                        <span className="font-mono font-black text-xl tracking-wide text-emerald-700">/link {code || '------'}</span>
+                      <div className="bg-sky-50 border border-sky-200 rounded-2xl px-4 py-5 text-center">
+                        <span className="font-mono font-black text-xl tracking-wide text-sky-700">/link {code || '------'}</span>
                       </div>
                       {expiresAtLabel && <p className="mt-2 text-xs text-gray-500">Code expires at {expiresAtLabel}</p>}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-emerald-500 text-white font-bold text-sm active:scale-95 transition-transform">
+                    <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-sky-500 text-white font-bold text-sm active:scale-95 transition-transform">
                       {copied ? 'Copied!' : 'Copy command'}
                     </button>
                     <button onClick={onRefreshCode} className="px-4 py-2.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
@@ -321,7 +321,7 @@ export default function GroupHome() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
       </div>
     )
   }
@@ -639,7 +639,7 @@ export default function GroupHome() {
             </button>
               <p className="text-amber-800 text-xs font-medium leading-relaxed">
                 {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you — you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} ·{' '}
-                <button onClick={() => handlePay(debtReminder)} className="text-emerald-600 font-bold">
+                <button onClick={() => handlePay(debtReminder)} className="text-sky-600 font-bold">
                   Pay now →
                 </button>
               </p>
@@ -650,10 +650,10 @@ export default function GroupHome() {
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">Your balances</p>
           {allSettled ? (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+            <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 text-center">
               <p className="text-2xl mb-1">✅</p>
-              <p className="text-emerald-700 font-bold text-sm">All settled up!</p>
-              <p className="text-emerald-500 text-xs mt-0.5">Everyone's even on this trip</p>
+              <p className="text-sky-700 font-bold text-sm">All settled up!</p>
+              <p className="text-sky-500 text-xs mt-0.5">Everyone's even on this trip</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -800,7 +800,7 @@ export default function GroupHome() {
                 onChange={(e) => setGroupNameDraft(e.target.value)}
                 maxLength={80}
                 placeholder="Enter group name"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -813,7 +813,7 @@ export default function GroupHome() {
               <button
                 onClick={handleSaveGroupName}
                 disabled={savingGroupName}
-                className="flex-1 py-3 rounded-full bg-emerald-500 text-white font-bold text-sm disabled:opacity-60"
+                className="flex-1 py-3 rounded-full bg-sky-500 text-white font-bold text-sm disabled:opacity-60"
               >
                 {savingGroupName ? 'Saving...' : 'Save'}
               </button>
@@ -854,7 +854,7 @@ export default function GroupHome() {
                     }}
                     className={`py-2 rounded-xl border text-xs font-semibold transition ${
                       selectedDeleteType === type.key
-                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                        ? 'border-sky-400 bg-sky-50 text-sky-700'
                         : 'border-gray-200 text-gray-600'
                     }`}
                   >
@@ -866,7 +866,7 @@ export default function GroupHome() {
               <select
                 value={selectedDeleteId}
                 onChange={(e) => setSelectedDeleteId(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
               >
                 <option value="">Select a {selectedDeleteType} to delete</option>
                 {selectedTypeOptions.map((option) => (

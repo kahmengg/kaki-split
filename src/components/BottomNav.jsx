@@ -50,7 +50,7 @@ export default function BottomNav({ onFABPress, groupId }) {
       <div className="flex items-center px-3 pt-2 pb-4" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <button
           onClick={() => navigate('/dashboard')}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isHome ? 'text-emerald-600' : 'text-gray-400'}`}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isHome ? 'text-sky-600' : 'text-gray-400'}`}
         >
           <HomeIcon filled={isHome} />
           <span className="text-[10px] font-medium">Home</span>
@@ -58,7 +58,7 @@ export default function BottomNav({ onFABPress, groupId }) {
 
               <button
                 onClick={() => navigate('/activity')}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isActivity ? 'text-emerald-600' : 'text-gray-400'}`}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isActivity ? 'text-sky-600' : 'text-gray-400'}`}
                 title={activityGroupId ? 'Open latest group activity' : 'View your recent group activity'}
               >
 
@@ -70,8 +70,8 @@ export default function BottomNav({ onFABPress, groupId }) {
 
         <button
           onClick={onFABPress}
-          className="w-14 h-14 rounded-full bg-emerald-500 shadow-lg flex items-center justify-center -mt-6 flex-shrink-0 active:scale-95 transition-transform"
-          style={{ boxShadow: '0 4px 20px rgba(16, 185, 129, 0.45)' }}
+          className="w-14 h-14 rounded-full bg-sky-500 shadow-lg flex items-center justify-center -mt-6 flex-shrink-0 active:scale-95 transition-transform"
+          style={{ boxShadow: '0 4px 20px rgba(14, 165, 233, 0.45)' }}
         >
           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -80,7 +80,7 @@ export default function BottomNav({ onFABPress, groupId }) {
 
         <button
           onClick={() => navigate('/profile')}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isProfile ? 'text-emerald-600' : 'text-gray-400'}`}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isProfile ? 'text-sky-600' : 'text-gray-400'}`}
         >
           <ProfileIcon filled={isProfile} />
           <span className="text-[10px] font-medium">Profile</span>

@@ -1,6 +1,6 @@
-# FairSplit
+# Kaki Split
 
-FairSplit is a mobile-first group expense sharing app for trips, events, and day-to-day shared spending.
+Kaki Split is a mobile-first group expense sharing app for trips, events, and day-to-day shared spending.
 
 Built with React + Vite and Supabase Auth.
 

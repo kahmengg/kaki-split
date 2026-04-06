@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { joinGroupByInviteCode } from '../lib/fairsplitApi'
+import { joinGroupByInviteCode } from '../lib/kakiSplitApi'
 
 const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
@@ -82,7 +82,7 @@ export default function JoinInvite() {
 
         {loading ? (
           <div className="mt-6 flex justify-center">
-            <div className="w-9 h-9 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
           </div>
         ) : user ? (
           <div className="mt-5 space-y-2">
@@ -92,7 +92,7 @@ export default function JoinInvite() {
         ) : (
           <div className="mt-5 space-y-3">
             <p className="text-sm text-gray-600">Sign in first, then we will auto-join this group.</p>
-            <button onClick={goToLogin} className="w-full py-3 bg-emerald-500 text-white rounded-2xl font-bold text-sm">
+            <button onClick={goToLogin} className="w-full py-3 bg-sky-500 text-white rounded-2xl font-bold text-sm">
               Sign in to join
             </button>
           </div>

@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, PieCha
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { fetchInsightsData } from '../lib/fairsplitApi'
+import { fetchInsightsData } from '../lib/kakiSplitApi'
 import { CATEGORIES, formatMoney } from '../lib/format'
 
 const CATEGORY_COLOR = {
@@ -69,7 +69,7 @@ export default function Insights() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
       </div>
     )
   }
@@ -81,7 +81,7 @@ export default function Insights() {
           <p className="text-gray-600 font-semibold">No insights available for this group yet.</p>
           <button
             onClick={() => navigate(`/groups/${id}`)}
-            className="mt-4 px-4 py-2.5 rounded-full bg-emerald-500 text-white text-sm font-bold"
+            className="mt-4 px-4 py-2.5 rounded-full bg-sky-500 text-white text-sm font-bold"
           >
             Back to group
           </button>
@@ -107,19 +107,19 @@ export default function Insights() {
       </div>
 
       <div className="px-4 pt-5 space-y-4">
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white">
-          <p className="text-emerald-100 text-sm font-medium mb-1">Total group spend</p>
+        <div className="bg-gradient-to-br from-sky-500 to-teal-600 rounded-3xl p-6 text-white">
+          <p className="text-sky-100 text-sm font-medium mb-1">Total group spend</p>
           <p className="text-4xl font-black">{formatMoney(data.totalSpend, data.group.base_currency)}</p>
           <div className="flex gap-4 mt-3 pt-3 border-t border-white/20">
             <div>
-              <p className="text-emerald-100 text-xs">Most active day</p>
+              <p className="text-sky-100 text-xs">Most active day</p>
               <p className="text-white font-bold text-sm">
                 {data.mostActiveDay ? new Date(data.mostActiveDay).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }) : '—'}
               </p>
             </div>
             <div className="w-px bg-white/20" />
             <div>
-              <p className="text-emerald-100 text-xs">Top expense</p>
+              <p className="text-sky-100 text-xs">Top expense</p>
               <p className="text-white font-bold text-sm">{data.topExpense?.description || '—'}</p>
             </div>
           </div>
@@ -129,7 +129,7 @@ export default function Insights() {
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Top expense</p>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-2xl">🏷️</div>
+              <div className="w-12 h-12 bg-sky-50 rounded-2xl flex items-center justify-center text-2xl">🏷️</div>
               <div className="flex-1">
                 <p className="font-bold text-gray-900">{data.topExpense.description}</p>
                 <p className="text-gray-400 text-xs">

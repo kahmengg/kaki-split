@@ -6,7 +6,7 @@ import BottomSheet from '../components/BottomSheet'
 import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { createGroup, fetchDashboardData } from '../lib/fairsplitApi'
+import { createGroup, fetchDashboardData } from '../lib/kakiSplitApi'
 import { formatMoney, timeAgo } from '../lib/format'
 
 function GroupCard({ group, usersById, onClick }) {
@@ -32,8 +32,8 @@ function GroupCard({ group, usersById, onClick }) {
             </div>
           ) : (
             <div>
-              <div className="text-emerald-600 font-bold text-sm">+{formatMoney(balance, group.base_currency)}</div>
-              <div className="text-emerald-500 text-xs">owed to you</div>
+              <div className="text-sky-600 font-bold text-sm">+{formatMoney(balance, group.base_currency)}</div>
+              <div className="text-sky-500 text-xs">owed to you</div>
             </div>
           )}
         </div>
@@ -132,7 +132,7 @@ export default function Dashboard() {
         name: user.email?.split('@')[0] || 'You',
         display_name: user.email?.split('@')[0] || 'You',
         email: user.email,
-        avatar_color: '#10b981',
+          avatar_color: '#0ea5e9',
       }
     : null
 
@@ -148,7 +148,7 @@ export default function Dashboard() {
               <ThemeToggle />
               <button
                 onClick={() => navigate('/profile')}
-                className="rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="rounded-full focus:outline-none focus:ring-2 focus:ring-sky-400"
                 aria-label="Open profile"
                 title="Open profile"
               >
@@ -166,9 +166,9 @@ export default function Dashboard() {
             </div>
           )}
           {totalOwed > 0 && (
-            <div className="flex-1 bg-emerald-50 rounded-2xl p-3 border border-emerald-100">
-              <div className="text-xs text-emerald-500 font-medium">Owed to you</div>
-              <div className="text-emerald-700 font-bold text-lg">{formatMoney(totalOwed)}</div>
+            <div className="flex-1 bg-sky-50 rounded-2xl p-3 border border-sky-100">
+              <div className="text-xs text-sky-500 font-medium">Owed to you</div>
+              <div className="text-sky-700 font-bold text-lg">{formatMoney(totalOwed)}</div>
             </div>
           )}
           {totalOwe === 0 && totalOwed === 0 && (
@@ -203,21 +203,21 @@ export default function Dashboard() {
       <div className="px-4 pt-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-gray-900">Your groups</h2>
-          <button onClick={() => setShowNewGroup(true)} className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold">
+          <button onClick={() => setShowNewGroup(true)} className="flex items-center gap-1.5 text-sky-600 text-sm font-semibold">
             <span className="text-lg leading-none">+</span> New
           </button>
         </div>
 
         {loading ? (
           <div className="py-14 flex justify-center">
-            <div className="w-9 h-9 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
           </div>
         ) : groups.length === 0 ? (
           <div className="text-center py-16 px-6">
             <div className="text-6xl mb-4">🍜</div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">No groups yet</h3>
             <p className="text-gray-500 text-sm mb-6">Create a group for your next trip or dinner</p>
-            <button onClick={() => setShowNewGroup(true)} className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl font-bold mb-3">
+            <button onClick={() => setShowNewGroup(true)} className="w-full py-3.5 bg-sky-500 text-white rounded-2xl font-bold mb-3">
               Create a group
             </button>
           </div>
@@ -241,7 +241,7 @@ export default function Dashboard() {
               value={groupName}
               onChange={(event) => setGroupName(event.target.value)}
               placeholder="Bali Trip 🌴"
-              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
               autoFocus
             />
           </div>
@@ -253,7 +253,7 @@ export default function Dashboard() {
                 <button
                   key={value}
                   onClick={() => setCurrency(value)}
-                  className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${currency === value ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-600'}`}
+                  className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${currency === value ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 text-gray-600'}`}
                 >
                   {value}
                 </button>
@@ -264,8 +264,8 @@ export default function Dashboard() {
           <button
             onClick={handleCreateGroup}
             disabled={!groupName.trim() || creating}
-            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-base disabled:opacity-50 mt-2"
-            style={{ boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)' }}
+            className="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base disabled:opacity-50 mt-2"
+            style={{ boxShadow: '0 4px 16px rgba(14, 165, 233, 0.3)' }}
           >
             {creating ? 'Creating...' : 'Create group'}
           </button>
