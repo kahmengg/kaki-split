@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Avatar from '../components/Avatar'
+import ReceiptAssigner from '../components/ReceiptAssigner'
+import { useReceiptScanner } from '../hooks/useReceiptScanner'
 import { CATEGORIES, CURRENCIES, formatMoney } from '../lib/format'
 
 const SPLIT_TYPES = [
@@ -29,8 +31,12 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
   const [currency, setCurrency] = useState('SGD')
   const [showCurrency, setShowCurrency] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [receiptData, setReceiptData] = useState(null)
+  const [showAssigner, setShowAssigner] = useState(false)
+  const fileInputRef = useRef(null)
   const amountRef = useRef(null)
   const submitInFlightRef = useRef(false)
+  const { scanReceipt, scanning, error: scanError, setError: setScanError } = useReceiptScanner()
 
   useEffect(() => {
     window.setTimeout(() => amountRef.current?.focus(), 100)
@@ -164,6 +170,43 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
     }
   }
 
+  const handleReceiptUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const data = await scanReceipt(file)
+    event.target.value = ''
+
+    if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+      return
+    }
+
+    setReceiptData(data)
+    setShowAssigner(true)
+  }
+
+  const handleAssignConfirm = (result) => {
+    const nextDescription = String(result?.description || '').trim()
+    const nextAmount = Number(result?.amount || 0)
+    const nextCurrency = String(result?.currency || currency).toUpperCase()
+    const nextSplits = Array.isArray(result?.splits) ? result.splits : []
+
+    if (nextDescription) setDescription(nextDescription)
+    if (Number.isFinite(nextAmount) && nextAmount > 0) setAmount(String(round2(nextAmount)))
+    if (nextCurrency) setCurrency(nextCurrency)
+
+    setSplitType('exact')
+    setSplitMembers(nextSplits.map((item) => item.memberId))
+    setSplitValues(
+      nextSplits.reduce((acc, item) => {
+        acc[item.memberId] = String(round2(item.amount))
+        return acc
+      }, {})
+    )
+
+    setShowAssigner(false)
+  }
+
   return (
     <div className="flex flex-col">
         <div className="bg-sky-50 border-b border-sky-100 px-5 py-6 text-center">
@@ -211,16 +254,49 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
         )}
       </div>
 
-      <div className="px-5 py-4 space-y-5 pb-36">
-        <div>
-          <input
-            type="text"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="What was this for?"
-            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-          />
-        </div>
+        <div className="px-5 py-4 space-y-5 pb-36">
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                setScanError(null)
+                fileInputRef.current?.click()
+              }}
+              disabled={scanning}
+              className="w-full py-3 rounded-2xl border border-sky-200 bg-sky-50 text-sky-700 font-semibold text-sm disabled:opacity-60"
+            >
+              {scanning ? 'Scanning receipt...' : '📷 Scan receipt'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleReceiptUpload}
+              className="hidden"
+            />
+            {scanError && <p className="text-xs text-amber-600">Could not scan receipt: {scanError}</p>}
+          </div>
+
+          {showAssigner && receiptData && (
+            <ReceiptAssigner
+              receipt={receiptData}
+              members={members}
+              onConfirm={handleAssignConfirm}
+              onCancel={() => setShowAssigner(false)}
+            />
+          )}
+
+          <div>
+            <input
+              type="text"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="What was this for?"
+              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
+            />
+          </div>
+
 
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Category</p>

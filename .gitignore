@@ -4,4 +4,5 @@ dist
 # .env.local # Removed by Orchids to allow .env files
 # .env.*.local # Removed by Orchids to allow .env files
 *.log
-.DS_Store
+.DS_Store.env
+.env
