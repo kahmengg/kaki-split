@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
 import AppLogo from '../components/AppLogo'
@@ -26,6 +26,11 @@ export default function Login() {
     const fromStorage = localStorage.getItem('kakisplit:pendingInviteCode')
     return fromStorage ? String(fromStorage).trim().toUpperCase() : ''
   }, [location.search])
+
+  const oauthRedirectPath = useMemo(() => {
+    if (pendingInviteCode) return `/join/${encodeURIComponent(pendingInviteCode)}`
+    return '/dashboard'
+  }, [pendingInviteCode])
 
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -66,13 +71,34 @@ export default function Login() {
     setLoadingSource('google')
     setLoading(true)
     try {
-      await signInWithGoogle()
+      await signInWithGoogle({ redirectPath: oauthRedirectPath })
     } catch (error) {
       showToast(error.message || 'Google sign-in failed. Please use email & password.', 'error')
       setLoading(false)
       setLoadingSource('password')
     }
   }
+
+  useEffect(() => {
+    if (loadingSource !== 'google') return
+
+    const timeoutId = window.setTimeout(() => {
+      setLoading(false)
+      setLoadingSource('password')
+    }, 8000)
+
+    const handleFocus = () => {
+      setLoading(false)
+      setLoadingSource('password')
+    }
+
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [loadingSource])
 
     return (
       <div className={`min-h-screen relative overflow-hidden transition-colors ${isDark ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-slate-100' : 'bg-gradient-to-b from-sky-50 via-white to-cyan-50 text-slate-900'}`}>

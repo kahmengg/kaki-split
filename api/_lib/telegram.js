@@ -39,19 +39,19 @@ function toPendingRetryTimestamp() {
 
 const DEFAULT_APP_URL = 'https://kaki-split.vercel.app'
 
+function normalizeUrl(url) {
+  return String(url || '')
+    .trim()
+    .replace(/^https?:\/\//, 'https://')
+    .replace(/\/+$/, '')
+}
+
 function getAppUrl() {
-  const configuredUrl = String(
-    process.env.APP_URL || process.env.WEB_APP_URL || process.env.NEXT_PUBLIC_APP_URL || ''
-  ).trim()
+  const configuredUrl = normalizeUrl(process.env.APP_URL || process.env.WEB_APP_URL || process.env.NEXT_PUBLIC_APP_URL || '')
+  if (configuredUrl) return configuredUrl
 
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/+$/, '')
-  }
-
-  const vercelUrl = String(process.env.VERCEL_URL || '').trim()
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
-  }
+  const productionVercelUrl = normalizeUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL || '')
+  if (productionVercelUrl) return productionVercelUrl
 
   return DEFAULT_APP_URL
 }
@@ -414,7 +414,11 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
       if (nowMinuteOfDay < scheduledMinuteOfDay) continue
 
 
-    const { data: group, error: groupError } = await adminSupabase.from('groups').select('id,name').eq('id', row.group_id).maybeSingle()
+      const { data: group, error: groupError } = await adminSupabase
+        .from('groups')
+        .select('id,name,invite_code')
+        .eq('id', row.group_id)
+        .maybeSingle()
     if (groupError) throw groupError
     if (!group) continue
 
@@ -478,8 +482,9 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
           lines.push(`• +${smartBalances.length - 5} more unsettled balance${smartBalances.length - 5 > 1 ? 's' : ''}`)
         }
 
-        const appUrl = getAppUrl()
-        const messageLines = ['Unsettled balances:', ...lines, '', `Settle up in app: ${appUrl}/groups/${group.id}`]
+          const appUrl = getAppUrl()
+          const invitePath = group.invite_code ? `/join/${group.invite_code}` : '/login'
+          const messageLines = ['Unsettled balances:', ...lines, '', `Settle up in app: ${appUrl}${invitePath}`]
 
         const { error: outboxError } = await adminSupabase.from('telegram_outbox').insert({
           group_id: row.group_id,
