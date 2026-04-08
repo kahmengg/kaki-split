@@ -24,6 +24,17 @@ import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
   const paidBy = usersById[expense.paid_by]
   const expenseCurrency = expense.original_currency || groupBaseCurrency || 'SGD'
+  const totalAmount = Number(expense.amount || 0)
+  const myShare = Number((expense.splits || []).find((split) => split.user_id === currentUserId)?.amount || 0)
+  const isPayer = expense.paid_by === currentUserId
+  const myLent = isPayer ? Math.max(0, totalAmount - myShare) : 0
+
+  let personalSummary = 'Not part of this expense'
+  if (myShare > 0 && isPayer) {
+    personalSummary = `Your share ${formatMoney(myShare, expenseCurrency)} · You lent ${formatMoney(myLent, expenseCurrency)}`
+  } else if (myShare > 0) {
+    personalSummary = `Your share ${formatMoney(myShare, expenseCurrency)}`
+  }
 
   return (
     <div className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0">
@@ -36,6 +47,7 @@ function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
           </div>
           <p className="font-bold text-gray-900 text-sm text-right flex-shrink-0">{formatMoney(expense.amount, expenseCurrency)}</p>
         </div>
+        <p className="text-[11px] text-gray-500 mt-1 truncate">{personalSummary}</p>
         <p className="text-gray-400 text-xs mt-1">{timeAgo(expense.created_at)}</p>
       </div>
     </div>
@@ -616,14 +628,19 @@ export default function GroupHome() {
           </div>
 
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {members.map((member) => (
-            <div key={member.id} className="flex flex-col items-center gap-1">
-              <Avatar user={member} size="sm" ring={member.id === user.id} />
-              <span className="text-[10px] text-gray-400 font-medium">{member.id === user.id ? 'You' : member.display_name.split(' ')[0]}</span>
-            </div>
-          ))}
-          <button onClick={handleShareInvite} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-1 flex-shrink-0">
+          <div className="flex items-start gap-1.5 flex-wrap">
+            {members.map((member) => {
+              const chipLabel = member.id === user.id ? 'You' : member.display_name.split(' ')[0]
+
+              return (
+                <div key={member.id} className="w-14 flex flex-col items-center gap-1">
+                  <Avatar user={member} size="sm" ring={member.id === user.id} />
+                  <span className="w-full text-center text-[10px] text-gray-400 font-medium truncate px-0.5">{chipLabel}</span>
+                </div>
+              )
+            })}
+            <button onClick={handleShareInvite} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-1 flex-shrink-0">
+
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>

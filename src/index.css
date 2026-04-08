@@ -168,6 +168,14 @@
     @apply bg-amber-900/35;
   }
 
+  .theme-dark .app-bottom-nav {
+    @apply bg-slate-900 border-slate-700/90;
+  }
+
+  .theme-dark .app-bottom-sheet {
+    @apply bg-slate-800;
+  }
+
   .theme-dark input,
   .theme-dark textarea,
   .theme-dark select {

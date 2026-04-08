@@ -388,6 +388,51 @@ function settleNetBalances(net) {
   return flows
 }
 
+function buildPairExpenseContext(expenses, splitsByExpenseId) {
+  const contextByPair = new Map()
+
+  for (const expense of expenses || []) {
+    const description = String(expense.description || '').trim()
+    if (!description) continue
+
+    const payerId = expense.paid_by
+    if (!payerId) continue
+
+    const splits = splitsByExpenseId.get(expense.id) || []
+    for (const split of splits) {
+      const debtorId = split.user_id
+      const share = Number(split.amount || 0)
+      if (!debtorId || debtorId === payerId || share <= 0) continue
+
+      const pairKey = `${debtorId}:${payerId}`
+      if (!contextByPair.has(pairKey)) {
+        contextByPair.set(pairKey, new Map())
+      }
+
+      const descriptionTotals = contextByPair.get(pairKey)
+      descriptionTotals.set(description, round2((descriptionTotals.get(description) || 0) + share))
+    }
+  }
+
+  return contextByPair
+}
+
+function formatPairExpenseContext(contextByPair, fromUserId, toUserId) {
+  const descriptionTotals = contextByPair.get(`${fromUserId}:${toUserId}`)
+  if (!descriptionTotals || descriptionTotals.size === 0) return ''
+
+  const ranked = [...descriptionTotals.entries()].sort((a, b) => b[1] - a[1])
+  const topDescriptions = ranked.slice(0, 2).map(([description]) => description)
+  const moreCount = Math.max(0, ranked.length - topDescriptions.length)
+
+  if (topDescriptions.length === 0) return ''
+  if (moreCount > 0) {
+    return `${topDescriptions.join(' + ')} +${moreCount} more`
+  }
+
+  return topDescriptions.join(' + ')
+}
+
 export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
   const { data: rows, error } = await adminSupabase
     .from('telegram_connections')
@@ -423,9 +468,9 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
     if (!group) continue
 
     const [{ data: members, error: membersError }, { data: expenses, error: expensesError }, { data: payments, error: paymentsError }] = await Promise.all([
-      adminSupabase.from('group_members').select('user_id').eq('group_id', row.group_id),
-      adminSupabase.from('expenses').select('id,amount,paid_by').eq('group_id', row.group_id),
-      adminSupabase.from('payments').select('from_user_id,to_user_id,amount').eq('group_id', row.group_id),
+        adminSupabase.from('group_members').select('user_id').eq('group_id', row.group_id),
+        adminSupabase.from('expenses').select('id,amount,paid_by,description').eq('group_id', row.group_id),
+        adminSupabase.from('payments').select('from_user_id,to_user_id,amount').eq('group_id', row.group_id),
     ])
 
     if (membersError) throw membersError
@@ -455,36 +500,41 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
       }
     }
 
-      const memberIds = (members || []).map((member) => member.user_id)
-      const net = computeNetBalances({ memberIds, expenses: expenses || [], splitsByExpenseId, payments: payments || [] })
-      const smartBalances = settleNetBalances(net)
+        const memberIds = (members || []).map((member) => member.user_id)
+        const net = computeNetBalances({ memberIds, expenses: expenses || [], splitsByExpenseId, payments: payments || [] })
+        const smartBalances = settleNetBalances(net)
+        const pairExpenseContext = buildPairExpenseContext(expenses || [], splitsByExpenseId)
 
-      if (smartBalances.length > 0) {
-        const userIds = [...new Set(smartBalances.flatMap((item) => [item.from, item.to]))]
-        const { data: profiles, error: profileError } = await adminSupabase
-          .from('profiles')
-          .select('id,display_name,email')
-          .in('id', userIds)
+        if (smartBalances.length > 0) {
+          const userIds = [...new Set(smartBalances.flatMap((item) => [item.from, item.to]))]
+          const { data: profiles, error: profileError } = await adminSupabase
+            .from('profiles')
+            .select('id,display_name,email')
+            .in('id', userIds)
 
-        if (profileError) throw profileError
+          if (profileError) throw profileError
 
-        const profileById = new Map(
-          (profiles || []).map((profile) => [profile.id, profile.display_name || String(profile.email || '').split('@')[0] || 'Member'])
-        )
+          const profileById = new Map(
+            (profiles || []).map((profile) => [profile.id, profile.display_name || String(profile.email || '').split('@')[0] || 'Member'])
+          )
 
-        const lines = smartBalances.slice(0, 5).map((item) => {
-          const fromName = profileById.get(item.from) || 'Member'
-          const toName = profileById.get(item.to) || 'Member'
-          return `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)}`
-        })
+          const lines = smartBalances.slice(0, 5).map((item) => {
+            const fromName = profileById.get(item.from) || 'Member'
+            const toName = profileById.get(item.to) || 'Member'
+            const context = formatPairExpenseContext(pairExpenseContext, item.from, item.to)
+            return context
+              ? `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)} (${context})`
+              : `• ${fromName} owes ${toName} ${round2(item.amount).toFixed(2)}`
+          })
 
-        if (smartBalances.length > 5) {
-          lines.push(`• +${smartBalances.length - 5} more unsettled balance${smartBalances.length - 5 > 1 ? 's' : ''}`)
-        }
+          if (smartBalances.length > 5) {
+            lines.push(`• +${smartBalances.length - 5} more unsettled balance${smartBalances.length - 5 > 1 ? 's' : ''}`)
+          }
 
-          const appUrl = getAppUrl()
-          const invitePath = group.invite_code ? `/join/${group.invite_code}` : '/login'
-          const messageLines = ['Unsettled balances:', ...lines, '', `Settle up in app: ${appUrl}${invitePath}`]
+            const appUrl = getAppUrl()
+            const invitePath = group.invite_code ? `/join/${group.invite_code}` : '/login'
+            const messageLines = ['Unsettled balances:', ...lines, '', `Settle up in app: ${appUrl}${invitePath}`]
+
 
         const { error: outboxError } = await adminSupabase.from('telegram_outbox').insert({
           group_id: row.group_id,

@@ -45,8 +45,9 @@ export default function BottomNav({ onFABPress, groupId }) {
   const isActivity = path === '/activity'
   const isProfile = path === '/profile'
 
-  return (
-    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white border-t border-gray-100 z-40">
+    return (
+      <div className="app-bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white border-t border-gray-100 z-40">
+
       <div className="flex items-center px-3 pt-2 pb-4" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <button
           onClick={() => navigate('/dashboard')}
