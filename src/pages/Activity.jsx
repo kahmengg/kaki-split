@@ -70,20 +70,31 @@ export default function Activity() {
   useEffect(() => {
     if (!user?.id) return
 
+    let cancelled = false
+
     async function loadActivity() {
       setLoading(true)
       try {
         const data = await fetchDashboardData(user.id)
+        if (cancelled) return
         setGroups(data.groups || [])
         setUsersById(data.usersById || {})
       } catch (error) {
-        showToast(error.message || 'Failed to load activity', 'error')
+        if (!cancelled) {
+          showToast(error.message || 'Failed to load activity', 'error')
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
     loadActivity()
+
+    return () => {
+      cancelled = true
+    }
   }, [showToast, user?.id])
 
   return (

@@ -23,18 +23,42 @@ import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 
 function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
   const paidBy = usersById[expense.paid_by]
-  const expenseCurrency = expense.original_currency || groupBaseCurrency || 'SGD'
-  const totalAmount = Number(expense.amount || 0)
-  const myShare = Number((expense.splits || []).find((split) => split.user_id === currentUserId)?.amount || 0)
+  const settledCurrency = groupBaseCurrency || 'SGD'
+  const originalCurrency = String(expense.original_currency || settledCurrency).trim().toUpperCase()
+  const originalAmount = Number(expense.original_amount || 0)
+  const settledAmount = Number(expense.amount || 0)
+  const hasOriginalAmount = Number.isFinite(originalAmount) && originalAmount > 0
+
+  const exchangeRate = Number(expense.exchange_rate || 0)
+  const hasConvertedAmount =
+    hasOriginalAmount &&
+    originalCurrency !== settledCurrency &&
+    Number.isFinite(exchangeRate) &&
+    exchangeRate > 0
+
+  const displayCurrency = hasConvertedAmount ? originalCurrency : settledCurrency
+  const totalDisplayAmount = hasConvertedAmount ? originalAmount : settledAmount
+
+  const myShareSettled = Number((expense.splits || []).find((split) => split.user_id === currentUserId)?.amount || 0)
+  const myShareDisplay = hasConvertedAmount ? myShareSettled / exchangeRate : myShareSettled
   const isPayer = expense.paid_by === currentUserId
-  const myLent = isPayer ? Math.max(0, totalAmount - myShare) : 0
+  const myLentSettled = isPayer ? Math.max(0, settledAmount - myShareSettled) : 0
+  const myLentDisplay = hasConvertedAmount ? myLentSettled / exchangeRate : myLentSettled
 
   let personalSummary = 'Not part of this expense'
-  if (myShare > 0 && isPayer) {
-    personalSummary = `Your share ${formatMoney(myShare, expenseCurrency)} · You lent ${formatMoney(myLent, expenseCurrency)}`
-  } else if (myShare > 0) {
-    personalSummary = `Your share ${formatMoney(myShare, expenseCurrency)}`
+  if (myShareDisplay > 0 && isPayer) {
+    personalSummary = `Your share ${formatMoney(myShareDisplay, displayCurrency)} · You lent ${formatMoney(myLentDisplay, displayCurrency)}`
+  } else if (myShareDisplay > 0) {
+    personalSummary = `Your share ${formatMoney(myShareDisplay, displayCurrency)}`
   }
+
+    const rateDate = String(expense.exchange_rate_date || '').trim()
+    const source = String(expense.exchange_rate_source || '').trim().toLowerCase()
+    const sourceLabel = source === 'frankfurter' ? 'Frankfurter' : source === 'cache_db' ? 'cached' : source === 'identity' ? 'same currency' : source
+    const convertedSummary = hasConvertedAmount
+      ? `${formatMoney(settledAmount, settledCurrency)} locked${rateDate ? ` · ${rateDate}` : ''}${sourceLabel ? ` · ${sourceLabel}` : ''}`
+      : null
+
 
   return (
     <div className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0">
@@ -45,7 +69,10 @@ function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
             <p className="font-semibold text-gray-900 text-sm truncate">{expense.description}</p>
             <p className="text-gray-400 text-xs mt-0.5 truncate">paid by {paidBy?.id === currentUserId ? 'You' : paidBy?.display_name || 'Unknown'}</p>
           </div>
-          <p className="font-bold text-gray-900 text-sm text-right flex-shrink-0">{formatMoney(expense.amount, expenseCurrency)}</p>
+          <div className="text-right flex-shrink-0">
+            <p className="font-bold text-gray-900 text-sm">{formatMoney(totalDisplayAmount, displayCurrency)}</p>
+            {convertedSummary && <p className="text-[11px] text-gray-500 mt-0.5">{convertedSummary}</p>}
+          </div>
         </div>
         <p className="text-[11px] text-gray-500 mt-1 truncate">{personalSummary}</p>
         <p className="text-gray-400 text-xs mt-1">{timeAgo(expense.created_at)}</p>
@@ -353,11 +380,21 @@ export default function GroupHome() {
 
   const expenseDeleteOptions = expenses.slice(0, 25).map((expense) => {
     const paidBy = usersById[expense.paid_by]
-    return {
-      id: expense.id,
-      label: `${expense.description} · ${formatMoney(expense.amount, expense.original_currency || group.base_currency)}`,
-      meta: `${paidBy?.display_name || 'Unknown'} · ${timeAgo(expense.created_at)}`,
-    }
+      const settledCurrency = group.base_currency || 'SGD'
+      const originalCurrency = String(expense.original_currency || settledCurrency).trim().toUpperCase()
+      const originalAmount = Number(expense.original_amount || 0)
+      const settledAmount = Number(expense.amount || 0)
+      const hasConverted = Number.isFinite(originalAmount) && originalAmount > 0 && originalCurrency !== settledCurrency
+      const amountLabel = hasConverted
+        ? `${formatMoney(originalAmount, originalCurrency)} (${formatMoney(settledAmount, settledCurrency)})`
+        : formatMoney(settledAmount, settledCurrency)
+
+      return {
+        id: expense.id,
+        label: `${expense.description} · ${amountLabel}`,
+        meta: `${paidBy?.display_name || 'Unknown'} · ${timeAgo(expense.created_at)}`,
+      }
+
   })
 
   const paymentDeleteOptions = payments.slice(0, 25).map((payment) => {
@@ -395,19 +432,21 @@ export default function GroupHome() {
     if (addExpenseInFlightRef.current) return
     addExpenseInFlightRef.current = true
 
-    try {
-      await addExpense({
-        groupId: id,
-        amount: payload.amount,
-        description: payload.description,
-        category: payload.category,
-        paidBy: payload.paid_by,
-        splitMembers: payload.split_members,
+      try {
+        await addExpense({
+          groupId: id,
+          amount: payload.amount,
+          description: payload.description,
+          category: payload.category,
+          paidBy: payload.paid_by,
+          splitMembers: payload.split_members,
           splitType: payload.split_type,
           splitValues: payload.split_values,
           currency: payload.currency,
+          baseCurrency: group.base_currency,
           createdBy: user.id,
         })
+
 
       setShowQuickSplit(false)
       showToast('Expense added!', 'success')

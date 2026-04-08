@@ -59,7 +59,7 @@ function GroupCard({ group, usersById, onClick }) {
 export default function Dashboard() {
   const navigate = useNavigate()
   const showToast = useToast()
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile } = useAuth()
 
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
@@ -72,23 +72,32 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user?.id) return
 
-      async function loadDashboard() {
-        setLoading(true)
-        try {
-          refreshProfile().catch(() => null)
-          const data = await fetchDashboardData(user.id)
-          setGroups(data.groups)
-          setUsersById(data.usersById)
-        } catch (error) {
+    let cancelled = false
+
+    async function loadDashboard() {
+      setLoading(true)
+      try {
+        const data = await fetchDashboardData(user.id)
+        if (cancelled) return
+        setGroups(data.groups)
+        setUsersById(data.usersById)
+      } catch (error) {
+        if (!cancelled) {
           showToast(error.message || 'Failed to load groups', 'error')
-        } finally {
+        }
+      } finally {
+        if (!cancelled) {
           setLoading(false)
         }
       }
-
+    }
 
     loadDashboard()
-  }, [refreshProfile, showToast, user?.id])
+
+    return () => {
+      cancelled = true
+    }
+  }, [showToast, user?.id])
 
   const totalOwed = useMemo(() => groups.reduce((sum, group) => (group.my_balance > 0 ? sum + group.my_balance : sum), 0), [groups])
   const totalOwe = useMemo(() => groups.reduce((sum, group) => (group.my_balance < 0 ? sum + Math.abs(group.my_balance) : sum), 0), [groups])

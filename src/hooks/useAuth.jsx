@@ -125,26 +125,28 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let isMounted = true
 
-  withTimeout(
+      withTimeout(
         withAuthLockRetry(() => supabase.auth.getSession()),
         AUTH_INIT_TIMEOUT_MS,
         'Session check timed out. Please refresh or sign in again.'
       )
+        .then(({ data, error }) => {
+          if (error) throw error
 
-      .then(async ({ data, error }) => {
-        if (error) throw error
-
-        if (!isMounted) return
-        const currentSession = data.session
-        setSession(currentSession)
-        setUser(currentSession?.user ?? null)
-        setAuthError(null)
+          if (!isMounted) return
+          const currentSession = data.session
+          setSession(currentSession)
+          setUser(currentSession?.user ?? null)
+          setAuthError(null)
 
           if (currentSession?.user) {
-            await loadProfile(currentSession.user, { softTimeout: true })
+            loadProfile(currentSession.user, { softTimeout: true }).catch((profileError) => {
+              if (!isMounted) return
+              console.error('Failed to load profile during auth bootstrap', profileError)
+              setAuthError(profileError.message || 'Unable to load your profile right now.')
+            })
           }
-
-      })
+        })
       .catch((error) => {
         console.error('Failed to initialize auth session', error)
         if (!isMounted) return
