@@ -175,20 +175,43 @@ async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDa
     query.set('date', endpointDate)
   }
 
-  const response = await fetch(`/api/fx?${query.toString()}`)
-  const payload = await response.json().catch(() => null)
-  const rate = Number(payload?.rate)
-  const asOfDate = String(payload?.asOfDate || '').trim()
-
-  if (!response.ok || !Number.isFinite(rate) || rate <= 0 || !asOfDate) {
-    throw new Error(payload?.error || `Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
+  const candidateUrls = [`/api/fx?${query.toString()}`]
+  const configuredAppUrl = String(import.meta.env.VITE_APP_URL || '').trim().replace(/\/$/, '')
+  if (configuredAppUrl) {
+    candidateUrls.push(`${configuredAppUrl}/api/fx?${query.toString()}`)
   }
 
-  return {
-    rate,
-    asOfDate,
-    source: String(payload?.source || 'frankfurter_proxy'),
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('orchids.cloud')) {
+    candidateUrls.push(`https://kaki-split.vercel.app/api/fx?${query.toString()}`)
   }
+
+  const tried = new Set()
+  for (const url of candidateUrls) {
+    if (!url || tried.has(url)) continue
+    tried.add(url)
+
+    try {
+      const response = await fetch(url)
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+      if (!contentType.includes('application/json')) continue
+
+      const payload = await response.json().catch(() => null)
+      const rate = Number(payload?.rate)
+      const asOfDate = String(payload?.asOfDate || '').trim()
+
+      if (response.ok && Number.isFinite(rate) && rate > 0 && asOfDate) {
+        return {
+          rate,
+          asOfDate,
+          source: String(payload?.source || 'frankfurter_proxy'),
+        }
+      }
+    } catch {
+      // try next app endpoint candidate
+    }
+  }
+
+  throw new Error(`Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
 }
 
 async function fetchExchangeRateViaOpenErApi({ fromCurrency, toCurrency, signal }) {
@@ -262,9 +285,12 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
       }
     } catch {
       try {
-        const response = await fetch(`https://api.frankfurter.app/${endpointDate}?from=${from}&to=${to}`, {
-          signal: controller.signal,
-        })
+          const response = await fetch(
+            `https://api.frankfurter.dev/v1/${endpointDate}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+            {
+              signal: controller.signal,
+            }
+          )
 
         const payload = await response.json().catch(() => null)
         const rate = Number(payload?.rates?.[to])

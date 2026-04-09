@@ -3,6 +3,12 @@ import { adminSupabase } from '../_lib/db.js'
 const DEFAULT_BASE = 'SGD'
 const DEFAULT_QUOTES = ['USD', 'EUR', 'JPY', 'MYR', 'THB', 'IDR', 'AUD', 'GBP', 'CNY', 'HKD']
 
+function applyCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+}
+
 function toDateKey(value = new Date()) {
   return new Date(value).toISOString().slice(0, 10)
 }
@@ -90,7 +96,9 @@ async function upsertRate({ fromCurrency, toCurrency, rate, asOfDate, source }) 
 }
 
 async function fetchFrankfurterRate({ fromCurrency, toCurrency, endpointDate }) {
-  const response = await fetch(`https://api.frankfurter.app/${endpointDate}?from=${fromCurrency}&to=${toCurrency}`)
+  const response = await fetch(
+    `https://api.frankfurter.dev/v1/${endpointDate}?from=${encodeURIComponent(fromCurrency)}&to=${encodeURIComponent(toCurrency)}`
+  )
   const payload = await response.json().catch(() => null)
   const rate = Number(payload?.rates?.[toCurrency])
   const asOfDate = String(payload?.date || endpointDate || '').trim() || toDateKey()
@@ -107,7 +115,9 @@ async function fetchFrankfurterRate({ fromCurrency, toCurrency, endpointDate }) 
 }
 
 async function fetchFrankfurterLatestRate({ fromCurrency, toCurrency }) {
-  const response = await fetch(`https://api.frankfurter.app/latest?from=${fromCurrency}&to=${toCurrency}`)
+  const response = await fetch(
+    `https://api.frankfurter.dev/v1/latest?from=${encodeURIComponent(fromCurrency)}&to=${encodeURIComponent(toCurrency)}`
+  )
   const payload = await response.json().catch(() => null)
   const rate = Number(payload?.rates?.[toCurrency])
   const asOfDate = String(payload?.date || '').trim() || toDateKey()
@@ -233,6 +243,13 @@ async function handlePrewarm(req, res) {
 }
 
 export default async function handler(req, res) {
+  applyCors(res)
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).end()
+    return
+  }
+
   const action = String(req.query?.action || '').trim().toLowerCase()
 
   if (action === 'prewarm') {
