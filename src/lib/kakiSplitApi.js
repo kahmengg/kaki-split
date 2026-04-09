@@ -16,6 +16,7 @@ function round2(value) {
 }
 
 const FX_RATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const FX_REQUEST_TIMEOUT_MS = 7000
 const fxRateCache = new Map()
 
 const API_READ_CACHE_TTL_MS = 15 * 1000
@@ -165,7 +166,34 @@ async function upsertStoredExchangeRate({ fromCurrency, toCurrency, rate, asOfDa
   throw error
 }
 
-async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDate }) {
+async function fetchWithTimeout(url, { signal, timeoutMs = FX_REQUEST_TIMEOUT_MS } = {}) {
+  const controller = new AbortController()
+
+  const onAbort = () => {
+    controller.abort()
+  }
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort()
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  }
+
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    window.clearTimeout(timeoutId)
+    if (signal) {
+      signal.removeEventListener('abort', onAbort)
+    }
+  }
+}
+
+async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDate, signal }) {
   const query = new URLSearchParams({
     from: fromCurrency,
     to: toCurrency,
@@ -175,25 +203,36 @@ async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDa
     query.set('date', endpointDate)
   }
 
-  const candidateUrls = [`/api/fx?${query.toString()}`]
-  const configuredAppUrl = String(import.meta.env.VITE_APP_URL || '').trim().replace(/\/$/, '')
+  const candidateUrls = []
+  const localPath = `/api/fx?${query.toString()}`
+  candidateUrls.push(localPath)
+
+  const configuredAppUrl = String(import.meta.env.VITE_APP_URL || import.meta.env.APP_URL || '').trim().replace(/\/$/, '')
   if (configuredAppUrl) {
     candidateUrls.push(`${configuredAppUrl}/api/fx?${query.toString()}`)
   }
 
-  if (typeof window !== 'undefined' && window.location.hostname.endsWith('orchids.cloud')) {
-    candidateUrls.push(`https://kaki-split.vercel.app/api/fx?${query.toString()}`)
+  if (typeof window !== 'undefined') {
+    const host = String(window.location.hostname || '').toLowerCase()
+    if (host.endsWith('orchids.cloud')) {
+      candidateUrls.push('https://kaki-split.vercel.app/api/fx?' + query.toString())
+    }
   }
 
   const tried = new Set()
+  let sawNetworkFailure = false
+
   for (const url of candidateUrls) {
     if (!url || tried.has(url)) continue
     tried.add(url)
 
     try {
-      const response = await fetch(url)
+      const response = await fetchWithTimeout(url, { signal, timeoutMs: FX_REQUEST_TIMEOUT_MS })
       const contentType = String(response.headers.get('content-type') || '').toLowerCase()
-      if (!contentType.includes('application/json')) continue
+
+      if (!contentType.includes('application/json')) {
+        continue
+      }
 
       const payload = await response.json().catch(() => null)
       const rate = Number(payload?.rate)
@@ -206,16 +245,24 @@ async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDa
           source: String(payload?.source || 'frankfurter_proxy'),
         }
       }
-    } catch {
-      // try next app endpoint candidate
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error
+      sawNetworkFailure = true
     }
   }
 
-  throw new Error(`Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
+  if (sawNetworkFailure) {
+    throw new Error(`Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
+  }
+
+  throw new Error(`No FX API endpoint returned usable JSON for ${fromCurrency} to ${toCurrency}`)
 }
 
 async function fetchExchangeRateViaOpenErApi({ fromCurrency, toCurrency, signal }) {
-  const response = await fetch(`https://open.er-api.com/v6/latest/${fromCurrency}`, { signal })
+  const response = await fetchWithTimeout(`https://open.er-api.com/v6/latest/${fromCurrency}`, {
+    signal,
+    timeoutMs: FX_REQUEST_TIMEOUT_MS,
+  })
   const payload = await response.json().catch(() => null)
   const rate = Number(payload?.rates?.[toCurrency])
 
@@ -270,27 +317,34 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
   }
 
   const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), 8000)
 
   try {
     let result
 
     try {
-      const quoted = await fetchExchangeRateViaAppApi({ fromCurrency: from, toCurrency: to, endpointDate })
+      const quoted = await fetchExchangeRateViaAppApi({
+        fromCurrency: from,
+        toCurrency: to,
+        endpointDate,
+        signal: controller.signal,
+      })
       result = {
         rate: quoted.rate,
         asOfDate: quoted.asOfDate,
         source: quoted.source,
         fetchedAt: Date.now(),
       }
-    } catch {
+    } catch (appApiError) {
+      if (appApiError?.name === 'AbortError') throw appApiError
+
       try {
-          const response = await fetch(
-            `https://api.frankfurter.dev/v1/${endpointDate}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-            {
-              signal: controller.signal,
-            }
-          )
+        const response = await fetchWithTimeout(
+          `https://api.frankfurter.dev/v1/${endpointDate}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+          {
+            signal: controller.signal,
+            timeoutMs: FX_REQUEST_TIMEOUT_MS,
+          }
+        )
 
         const payload = await response.json().catch(() => null)
         const rate = Number(payload?.rates?.[to])
@@ -306,8 +360,14 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
           source: 'frankfurter',
           fetchedAt: Date.now(),
         }
-      } catch {
-        const backup = await fetchExchangeRateViaOpenErApi({ fromCurrency: from, toCurrency: to, signal: controller.signal })
+      } catch (frankfurterError) {
+        if (frankfurterError?.name === 'AbortError') throw frankfurterError
+
+        const backup = await fetchExchangeRateViaOpenErApi({
+          fromCurrency: from,
+          toCurrency: to,
+          signal: controller.signal,
+        })
         result = {
           rate: backup.rate,
           asOfDate: backup.asOfDate,
@@ -322,6 +382,7 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
 
     return result
   } catch (error) {
+
     if (error?.name === 'AbortError') {
       throw new Error(`Currency conversion timed out for ${from} to ${to}`)
     }
@@ -344,8 +405,6 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
     }
 
     throw error
-  } finally {
-    window.clearTimeout(timeoutId)
   }
 }
 

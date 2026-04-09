@@ -21,7 +21,7 @@ import {
 } from '../lib/kakiSplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 
-function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
+function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency, forceBaseCurrency = false }) {
   const paidBy = usersById[expense.paid_by]
   const settledCurrency = groupBaseCurrency || 'SGD'
   const originalCurrency = String(expense.original_currency || settledCurrency).trim().toUpperCase()
@@ -36,14 +36,16 @@ function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency }) {
     Number.isFinite(exchangeRate) &&
     exchangeRate > 0
 
-  const displayCurrency = hasConvertedAmount ? originalCurrency : settledCurrency
-  const totalDisplayAmount = hasConvertedAmount ? originalAmount : settledAmount
+    const shouldShowOriginal = hasConvertedAmount && !forceBaseCurrency
+    const displayCurrency = shouldShowOriginal ? originalCurrency : settledCurrency
+    const totalDisplayAmount = shouldShowOriginal ? originalAmount : settledAmount
 
-  const myShareSettled = Number((expense.splits || []).find((split) => split.user_id === currentUserId)?.amount || 0)
-  const myShareDisplay = hasConvertedAmount ? myShareSettled / exchangeRate : myShareSettled
-  const isPayer = expense.paid_by === currentUserId
-  const myLentSettled = isPayer ? Math.max(0, settledAmount - myShareSettled) : 0
-  const myLentDisplay = hasConvertedAmount ? myLentSettled / exchangeRate : myLentSettled
+    const myShareSettled = Number((expense.splits || []).find((split) => split.user_id === currentUserId)?.amount || 0)
+    const myShareDisplay = shouldShowOriginal ? myShareSettled / exchangeRate : myShareSettled
+    const isPayer = expense.paid_by === currentUserId
+    const myLentSettled = isPayer ? Math.max(0, settledAmount - myShareSettled) : 0
+    const myLentDisplay = shouldShowOriginal ? myLentSettled / exchangeRate : myLentSettled
+
 
   let personalSummary = 'Not part of this expense'
   if (myShareDisplay > 0 && isPayer) {
@@ -242,6 +244,7 @@ export default function GroupHome() {
 
   const [telegramConnected, setTelegramConnected] = useState(false)
   const [telegramGroupName, setTelegramGroupName] = useState(null)
+  const [showAllInBaseCurrency, setShowAllInBaseCurrency] = useState(false)
   const [isTelegramConnecting, setIsTelegramConnecting] = useState(false)
   const [telegramCodeCopied, setTelegramCodeCopied] = useState(false)
   const [telegramCode, setTelegramCode] = useState('')
@@ -729,11 +732,24 @@ export default function GroupHome() {
           )}
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2 px-1">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Activity</p>
-            <span className="text-xs text-gray-400">{expenses.length} expenses</span>
-          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2 px-1 gap-2">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Activity</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAllInBaseCurrency((value) => !value)}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition ${
+                    showAllInBaseCurrency
+                      ? 'bg-sky-50 border-sky-300 text-sky-700'
+                      : 'bg-white border-gray-200 text-gray-600'
+                  }`}
+                >
+                  {showAllInBaseCurrency ? `Showing ${group.base_currency}` : `Show all in ${group.base_currency}`}
+                </button>
+                <span className="text-xs text-gray-400">{expenses.length} expenses</span>
+              </div>
+            </div>
+
 
           {expenses.length === 0 ? (
             <div className="text-center py-10 px-4 bg-white rounded-2xl border border-gray-100">
@@ -743,15 +759,17 @@ export default function GroupHome() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 px-4">
-                {expenses.map((expense) => (
-                  <ExpenseRow
-                    key={expense.id}
-                    expense={expense}
-                    usersById={usersById}
-                    currentUserId={user.id}
-                    groupBaseCurrency={group.base_currency}
-                  />
-                ))}
+                  {expenses.map((expense) => (
+                    <ExpenseRow
+                      key={expense.id}
+                      expense={expense}
+                      usersById={usersById}
+                      currentUserId={user.id}
+                      groupBaseCurrency={group.base_currency}
+                      forceBaseCurrency={showAllInBaseCurrency}
+                    />
+                  ))}
+
 
             </div>
           )}
