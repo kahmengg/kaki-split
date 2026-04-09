@@ -42,42 +42,25 @@ function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency, forc
 
     const myShareSettled = Number((expense.splits || []).find((split) => split.user_id === currentUserId)?.amount || 0)
     const myShareDisplay = shouldShowOriginal ? myShareSettled / exchangeRate : myShareSettled
-    const isPayer = expense.paid_by === currentUserId
-    const myLentSettled = isPayer ? Math.max(0, settledAmount - myShareSettled) : 0
-    const myLentDisplay = shouldShowOriginal ? myLentSettled / exchangeRate : myLentSettled
-
-
-  let personalSummary = 'Not part of this expense'
-  if (myShareDisplay > 0 && isPayer) {
-    personalSummary = `Your share ${formatMoney(myShareDisplay, displayCurrency)} · You lent ${formatMoney(myLentDisplay, displayCurrency)}`
-  } else if (myShareDisplay > 0) {
-    personalSummary = `Your share ${formatMoney(myShareDisplay, displayCurrency)}`
-  }
-
-    const rateDate = String(expense.exchange_rate_date || '').trim()
-    const source = String(expense.exchange_rate_source || '').trim().toLowerCase()
-    const sourceLabel = source === 'frankfurter' ? 'Frankfurter' : source === 'cache_db' ? 'cached' : source === 'identity' ? 'same currency' : source
-    const convertedSummary = hasConvertedAmount
-      ? `${formatMoney(settledAmount, settledCurrency)} locked${rateDate ? ` · ${rateDate}` : ''}${sourceLabel ? ` · ${sourceLabel}` : ''}`
-      : null
-
+  const normalizedMyShare = Number.isFinite(myShareDisplay) && myShareDisplay > 0 ? myShareDisplay : 0
+  const personalSummary = `Your share ${formatMoney(normalizedMyShare, displayCurrency)}`
 
   return (
     <div className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0">
       <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl">{getCategoryIcon(expense.category)}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 text-sm truncate">{expense.description}</p>
-            <p className="text-gray-400 text-xs mt-0.5 truncate">paid by {paidBy?.id === currentUserId ? 'You' : paidBy?.display_name || 'Unknown'}</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm truncate">{expense.description}</p>
+              <p className="text-gray-500 text-xs mt-0.5 truncate">Paid by {paidBy?.id === currentUserId ? 'You' : paidBy?.display_name || 'Unknown'}</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="font-bold text-gray-900 text-sm">{formatMoney(totalDisplayAmount, displayCurrency)}</p>
+            </div>
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="font-bold text-gray-900 text-sm">{formatMoney(totalDisplayAmount, displayCurrency)}</p>
-            {convertedSummary && <p className="text-[11px] text-gray-500 mt-0.5">{convertedSummary}</p>}
-          </div>
-        </div>
-        <p className="text-[11px] text-gray-500 mt-1 truncate">{personalSummary}</p>
-        <p className="text-gray-400 text-xs mt-1">{timeAgo(expense.created_at)}</p>
+          <p className="text-[11px] text-gray-500 mt-1 truncate">{personalSummary}</p>
+
+
       </div>
     </div>
   )
