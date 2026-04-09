@@ -1,6 +1,26 @@
 {
   "rewrites": [
     {
+      "source": "/api/telegram/daily",
+      "destination": "/api/telegram/jobs?action=daily"
+    },
+    {
+      "source": "/api/telegram/reminders",
+      "destination": "/api/telegram/jobs?action=reminders"
+    },
+    {
+      "source": "/api/telegram/dispatch",
+      "destination": "/api/telegram/jobs?action=dispatch"
+    },
+    {
+      "source": "/api/fx/quote",
+      "destination": "/api/fx"
+    },
+    {
+      "source": "/api/fx/prewarm",
+      "destination": "/api/fx?action=prewarm"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

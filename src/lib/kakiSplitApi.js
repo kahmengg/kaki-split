@@ -175,7 +175,7 @@ async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDa
     query.set('date', endpointDate)
   }
 
-  const response = await fetch(`/api/fx/quote?${query.toString()}`)
+  const response = await fetch(`/api/fx?${query.toString()}`)
   const payload = await response.json().catch(() => null)
   const rate = Number(payload?.rate)
   const asOfDate = String(payload?.asOfDate || '').trim()

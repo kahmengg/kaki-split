@@ -66,17 +66,29 @@ export default async function handler(req, res) {
     return
   }
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     res.status(500).json({ error: 'missing_gemini_api_key' })
     return
   }
 
   const imageBase64 = String(req.body?.imageBase64 || '').trim()
-  const mimeType = String(req.body?.mimeType || 'image/jpeg').trim()
+  const mimeType = String(req.body?.mimeType || 'image/jpeg').trim().toLowerCase()
 
   if (!imageBase64) {
     res.status(400).json({ error: 'image_required' })
+    return
+  }
+
+  const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedMimeTypes.has(mimeType)) {
+    res.status(400).json({ error: 'unsupported_mime_type' })
+    return
+  }
+
+  const maxBase64Length = 10 * 1024 * 1024
+  if (imageBase64.length > maxBase64Length) {
+    res.status(413).json({ error: 'image_too_large' })
     return
   }
 

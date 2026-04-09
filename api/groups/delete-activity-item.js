@@ -47,20 +47,19 @@ export default async function handler(req, res) {
     return
   }
 
-  const { data: membership, error: membershipError } = await adminSupabase
-    .from('group_members')
-    .select('group_id')
-    .eq('group_id', groupId)
-    .eq('user_id', user.id)
+  const { data: group, error: groupError } = await adminSupabase
+    .from('groups')
+    .select('id,created_by')
+    .eq('id', groupId)
     .maybeSingle()
 
-  if (membershipError) {
-    res.status(500).json({ error: membershipError.message || 'Unable to verify group membership' })
+  if (groupError) {
+    res.status(500).json({ error: groupError.message || 'Unable to verify group ownership' })
     return
   }
 
-  if (!membership) {
-    res.status(403).json({ error: 'Only group members can delete activity items' })
+  if (!group || group.created_by !== user.id) {
+    res.status(403).json({ error: 'Only the group owner can delete activity items' })
     return
   }
 

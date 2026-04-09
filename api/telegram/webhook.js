@@ -1,8 +1,20 @@
 import { handleTelegramWebhook } from '../_lib/telegram.js'
 
+function isAuthorizedWebhookRequest(req) {
+  const secret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim()
+  if (!secret) return true
+  const headerSecret = String(req.headers['x-telegram-bot-api-secret-token'] || '').trim()
+  return headerSecret === secret
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  if (!isAuthorizedWebhookRequest(req)) {
+    res.status(401).json({ error: 'Unauthorized' })
     return
   }
 

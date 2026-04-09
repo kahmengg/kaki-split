@@ -1,11 +1,21 @@
 import { adminSupabase } from '../_lib/db.js'
 
+const DEFAULT_BASE = 'SGD'
+const DEFAULT_QUOTES = ['USD', 'EUR', 'JPY', 'MYR', 'THB', 'IDR', 'AUD', 'GBP', 'CNY', 'HKD']
+
 function toDateKey(value = new Date()) {
   return new Date(value).toISOString().slice(0, 10)
 }
 
 function normalizeCurrency(code) {
   return String(code || '').trim().toUpperCase()
+}
+
+function isAuthorizedCronRequest(req) {
+  const cronSecret = String(process.env.CRON_SECRET || '').trim()
+  if (!cronSecret) return false
+  const authHeader = String(req.headers.authorization || '')
+  return authHeader === `Bearer ${cronSecret}`
 }
 
 async function readRate({ fromCurrency, toCurrency, asOfDate }) {
@@ -96,12 +106,20 @@ async function fetchFrankfurterRate({ fromCurrency, toCurrency, endpointDate }) 
   }
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' })
-    return
+async function fetchFrankfurterLatestRate({ fromCurrency, toCurrency }) {
+  const response = await fetch(`https://api.frankfurter.app/latest?from=${fromCurrency}&to=${toCurrency}`)
+  const payload = await response.json().catch(() => null)
+  const rate = Number(payload?.rates?.[toCurrency])
+  const asOfDate = String(payload?.date || '').trim() || toDateKey()
+
+  if (!response.ok || !Number.isFinite(rate) || rate <= 0) {
+    throw new Error(payload?.error || `Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
   }
 
+  return { rate, asOfDate, source: 'frankfurter' }
+}
+
+async function handleQuote(req, res) {
   const fromCurrency = normalizeCurrency(req.query?.from)
   const toCurrency = normalizeCurrency(req.query?.to)
   const date = String(req.query?.date || '').trim()
@@ -153,4 +171,74 @@ export default async function handler(req, res) {
   } catch (error) {
     res.status(500).json({ error: error?.message || 'Unable to fetch exchange rate' })
   }
+}
+
+async function handlePrewarm(req, res) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  const cronSecret = String(process.env.CRON_SECRET || '').trim()
+  if (!cronSecret) {
+    res.status(503).json({ error: 'CRON_SECRET is not configured' })
+    return
+  }
+
+  if (!isAuthorizedCronRequest(req)) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  const requestedBase = String(req.query?.base || DEFAULT_BASE).trim().toUpperCase() || DEFAULT_BASE
+  const requestedQuotesRaw = String(req.query?.quotes || '')
+  const requestedQuotes = requestedQuotesRaw
+    ? requestedQuotesRaw
+        .split(',')
+        .map((item) => String(item || '').trim().toUpperCase())
+        .filter(Boolean)
+    : DEFAULT_QUOTES
+
+  const quotes = Array.from(new Set(requestedQuotes.filter((code) => code !== requestedBase)))
+
+  let refreshed = 0
+  let failed = 0
+  const errors = []
+
+  for (const quote of quotes) {
+    try {
+      const result = await fetchFrankfurterLatestRate({ fromCurrency: quote, toCurrency: requestedBase })
+      await upsertRate({
+        fromCurrency: quote,
+        toCurrency: requestedBase,
+        rate: result.rate,
+        asOfDate: result.asOfDate,
+        source: result.source,
+      })
+      refreshed += 1
+    } catch (error) {
+      failed += 1
+      errors.push({ currency: quote, error: error?.message || 'Unknown error' })
+    }
+  }
+
+  res.status(200).json({
+    ok: true,
+    base: requestedBase,
+    refreshed,
+    failed,
+    total: quotes.length,
+    errors: errors.slice(0, 10),
+  })
+}
+
+export default async function handler(req, res) {
+  const action = String(req.query?.action || '').trim().toLowerCase()
+
+  if (action === 'prewarm') {
+    await handlePrewarm(req, res)
+    return
+  }
+
+  await handleQuote(req, res)
 }
