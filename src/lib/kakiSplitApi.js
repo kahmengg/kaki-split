@@ -165,6 +165,48 @@ async function upsertStoredExchangeRate({ fromCurrency, toCurrency, rate, asOfDa
   throw error
 }
 
+async function fetchExchangeRateViaAppApi({ fromCurrency, toCurrency, endpointDate }) {
+  const query = new URLSearchParams({
+    from: fromCurrency,
+    to: toCurrency,
+  })
+
+  if (endpointDate && endpointDate !== 'latest') {
+    query.set('date', endpointDate)
+  }
+
+  const response = await fetch(`/api/fx/quote?${query.toString()}`)
+  const payload = await response.json().catch(() => null)
+  const rate = Number(payload?.rate)
+  const asOfDate = String(payload?.asOfDate || '').trim()
+
+  if (!response.ok || !Number.isFinite(rate) || rate <= 0 || !asOfDate) {
+    throw new Error(payload?.error || `Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
+  }
+
+  return {
+    rate,
+    asOfDate,
+    source: String(payload?.source || 'frankfurter_proxy'),
+  }
+}
+
+async function fetchExchangeRateViaOpenErApi({ fromCurrency, toCurrency, signal }) {
+  const response = await fetch(`https://open.er-api.com/v6/latest/${fromCurrency}`, { signal })
+  const payload = await response.json().catch(() => null)
+  const rate = Number(payload?.rates?.[toCurrency])
+
+  if (!response.ok || !Number.isFinite(rate) || rate <= 0) {
+    throw new Error(`Unable to fetch exchange rate (${fromCurrency} to ${toCurrency})`)
+  }
+
+  return {
+    rate,
+    asOfDate: new Date().toISOString().slice(0, 10),
+    source: 'open_er_api',
+  }
+}
+
 async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = null }) {
   const from = String(fromCurrency || '').trim().toUpperCase()
   const to = String(toCurrency || '').trim().toUpperCase()
@@ -208,27 +250,49 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
   const timeoutId = window.setTimeout(() => controller.abort(), 8000)
 
   try {
-    const response = await fetch(`https://api.frankfurter.app/${endpointDate}?from=${from}&to=${to}`, {
-      signal: controller.signal,
-    })
+    let result
 
-    const payload = await response.json().catch(() => null)
-    const rate = Number(payload?.rates?.[to])
-    const asOfDate = String(payload?.date || endpointDate || '').trim() || new Date().toISOString().slice(0, 10)
+    try {
+      const quoted = await fetchExchangeRateViaAppApi({ fromCurrency: from, toCurrency: to, endpointDate })
+      result = {
+        rate: quoted.rate,
+        asOfDate: quoted.asOfDate,
+        source: quoted.source,
+        fetchedAt: Date.now(),
+      }
+    } catch {
+      try {
+        const response = await fetch(`https://api.frankfurter.app/${endpointDate}?from=${from}&to=${to}`, {
+          signal: controller.signal,
+        })
 
-    if (!response.ok || !Number.isFinite(rate) || rate <= 0) {
-      throw new Error(payload?.error || `Unable to fetch exchange rate (${from} to ${to})`)
-    }
+        const payload = await response.json().catch(() => null)
+        const rate = Number(payload?.rates?.[to])
+        const asOfDate = String(payload?.date || endpointDate || '').trim() || new Date().toISOString().slice(0, 10)
 
-    const result = {
-      rate,
-      asOfDate,
-      source: 'frankfurter',
-      fetchedAt: Date.now(),
+        if (!response.ok || !Number.isFinite(rate) || rate <= 0) {
+          throw new Error(payload?.error || `Unable to fetch exchange rate (${from} to ${to})`)
+        }
+
+        result = {
+          rate,
+          asOfDate,
+          source: 'frankfurter',
+          fetchedAt: Date.now(),
+        }
+      } catch {
+        const backup = await fetchExchangeRateViaOpenErApi({ fromCurrency: from, toCurrency: to, signal: controller.signal })
+        result = {
+          rate: backup.rate,
+          asOfDate: backup.asOfDate,
+          source: backup.source,
+          fetchedAt: Date.now(),
+        }
+      }
     }
 
     fxRateCache.set(cacheKey, result)
-    await upsertStoredExchangeRate({ fromCurrency: from, toCurrency: to, rate, asOfDate, source: 'frankfurter' })
+    await upsertStoredExchangeRate({ fromCurrency: from, toCurrency: to, rate: result.rate, asOfDate: result.asOfDate, source: result.source })
 
     return result
   } catch (error) {
