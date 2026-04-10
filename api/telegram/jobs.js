@@ -15,7 +15,8 @@ function resolveAction(req) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  const method = String(req.method || '').toUpperCase()
+  if (method !== 'POST' && method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
