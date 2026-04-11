@@ -56,6 +56,20 @@ function fallbackName(user) {
   return 'Kaki Split User'
 }
 
+function buildEmailRedirectUrl(pathname = '/login') {
+  const normalizedPath = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : '/login'
+  const configuredBaseUrl = import.meta.env.VITE_AUTH_REDIRECT_BASE_URL || import.meta.env.VITE_APP_URL
+
+  if (!configuredBaseUrl) return null
+
+  try {
+    return new URL(normalizedPath, configuredBaseUrl).toString()
+  } catch (error) {
+    console.warn('Invalid auth redirect base URL. Falling back to Supabase default redirect.', error)
+    return null
+  }
+}
+
 async function ensureProfileRow(user) {
   if (!user?.id) return null
 
@@ -197,15 +211,22 @@ export function AuthProvider({ children }) {
     }, [])
 
 
-  const signUp = useCallback(async ({ email, password, name }) => {
+  const signUp = useCallback(async ({ email, password, name, redirectPath = '/login' }) => {
+    const emailRedirectTo = buildEmailRedirectUrl(redirectPath)
+    const signUpOptions = {
+      data: {
+        display_name: name,
+      },
+    }
+
+    if (emailRedirectTo) {
+      signUpOptions.emailRedirectTo = emailRedirectTo
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          display_name: name,
-        },
-      },
+      options: signUpOptions,
     })
 
     if (error) throw error
@@ -235,14 +256,17 @@ export function AuthProvider({ children }) {
     const normalizedEmail = String(email || '').trim()
     if (!normalizedEmail) throw new Error('Email is required to resend confirmation.')
 
-    const normalizedPath = typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/login'
-    const { error } = await supabase.auth.resend({
+    const emailRedirectTo = buildEmailRedirectUrl(redirectPath)
+    const resendOptions = {
       type: 'signup',
       email: normalizedEmail,
-      options: {
-        emailRedirectTo: `${window.location.origin}${normalizedPath}`,
-      },
-    })
+    }
+
+    if (emailRedirectTo) {
+      resendOptions.options = { emailRedirectTo }
+    }
+
+    const { error } = await supabase.auth.resend(resendOptions)
 
     if (error) throw error
   }, [])
