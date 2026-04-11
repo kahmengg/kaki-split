@@ -1,11 +1,27 @@
 import { queueDailyTelegramReminders, processTelegramOutbox } from '../_lib/telegram.js'
 
-
 function resolveAction(req) {
   const queryAction = String(req.query?.action || '').trim().toLowerCase()
   const bodyAction = String(req.body?.action || '').trim().toLowerCase()
   const action = queryAction || bodyAction || 'daily'
   return action
+}
+
+function readBearerToken(req) {
+  const authHeader = String(req.headers?.authorization || '')
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() || ''
+}
+
+function isCronAuthorized(req) {
+  const configuredSecret = String(process.env.CRON_SECRET || '').trim()
+  if (!configuredSecret) return true
+  const providedToken = readBearerToken(req)
+  return providedToken === configuredSecret
+}
+
+function actionRequiresCronAuth(action) {
+  return action === 'daily' || action === 'reminders' || action === 'dispatch'
 }
 
 export default async function handler(req, res) {
@@ -15,8 +31,15 @@ export default async function handler(req, res) {
     return
   }
 
-
   const action = resolveAction(req)
+
+  if (actionRequiresCronAuth(action) && !isCronAuthorized(req)) {
+    res.status(401).json({
+      error: 'Unauthorized',
+      hint: 'Send Authorization: Bearer <CRON_SECRET> when CRON_SECRET is configured',
+    })
+    return
+  }
 
   try {
     if (action === 'reminders') {
