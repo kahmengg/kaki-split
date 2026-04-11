@@ -1,15 +1,5 @@
 import { queueDailyTelegramReminders, processTelegramOutbox } from '../_lib/telegram.js'
 
-function isAuthorizedCronRequest(req) {
-  const requireAuth = String(process.env.REQUIRE_CRON_AUTH || '').trim().toLowerCase() === 'true'
-  if (!requireAuth) return true
-
-  const cronSecret = String(process.env.CRON_SECRET || '').trim()
-  if (!cronSecret) return false
-
-  const authHeader = String(req.headers.authorization || '')
-  return authHeader === `Bearer ${cronSecret}`
-}
 
 function resolveAction(req) {
   const queryAction = String(req.query?.action || '').trim().toLowerCase()
@@ -25,10 +15,6 @@ export default async function handler(req, res) {
     return
   }
 
-  if (!isAuthorizedCronRequest(req)) {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
-  }
 
   const action = resolveAction(req)
 
