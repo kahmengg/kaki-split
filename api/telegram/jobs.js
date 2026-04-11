@@ -1,8 +1,12 @@
 import { queueDailyTelegramReminders, processTelegramOutbox } from '../_lib/telegram.js'
 
 function isAuthorizedCronRequest(req) {
+  const requireAuth = String(process.env.REQUIRE_CRON_AUTH || '').trim().toLowerCase() === 'true'
+  if (!requireAuth) return true
+
   const cronSecret = String(process.env.CRON_SECRET || '').trim()
   if (!cronSecret) return false
+
   const authHeader = String(req.headers.authorization || '')
   return authHeader === `Bearer ${cronSecret}`
 }
