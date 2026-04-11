@@ -13,6 +13,13 @@ const ActivityIcon = ({ filled }) => (
   </svg>
 )
 
+const InsightsIcon = ({ filled }) => (
+  <svg viewBox="0 0 24 24" className="w-6 h-6" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 15.75l3.75-3.75 2.25 2.25 4.5-5.25" />
+  </svg>
+)
+
 const ProfileIcon = ({ filled }) => (
   <svg viewBox="0 0 24 24" className="w-6 h-6" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
@@ -43,36 +50,49 @@ export default function BottomNav({ onFABPress, groupId }) {
 
   const isHome = path === '/dashboard' || path === '/'
   const isActivity = path === '/activity'
+  const isInsights = /^\/groups\/[^/]+\/insights$/.test(path)
   const isProfile = path === '/profile'
 
-    return (
-      <div className="app-bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white border-t border-gray-100 z-40">
+  const handleInsightsPress = () => {
+    if (activeGroupId) {
+      navigate(`/groups/${activeGroupId}/insights`)
+      return
+    }
 
-      <div className="flex items-center px-3 pt-2 pb-4" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+    const lastGroupId = localStorage.getItem('kakisplit:lastGroupId')
+    if (lastGroupId) {
+      navigate(`/groups/${lastGroupId}/insights`)
+      return
+    }
+
+    navigate('/dashboard')
+  }
+
+  return (
+    <div className="app-bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white border-t border-gray-100 z-40">
+      <div className="grid grid-cols-5 items-end px-2 pt-2 pb-4" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <button
           onClick={() => navigate('/dashboard')}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isHome ? 'text-sky-600' : 'text-gray-400'}`}
+          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isHome ? 'text-sky-600' : 'text-gray-400'}`}
         >
           <HomeIcon filled={isHome} />
           <span className="text-[10px] font-medium">Home</span>
         </button>
 
-              <button
-                onClick={() => navigate('/activity')}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isActivity ? 'text-sky-600' : 'text-gray-400'}`}
-                title={activityGroupId ? 'Open latest group activity' : 'View your recent group activity'}
-              >
-
-
-
+        <button
+          onClick={() => navigate('/activity')}
+          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isActivity ? 'text-sky-600' : 'text-gray-400'}`}
+          title={activityGroupId ? 'Open latest group activity' : 'View your recent group activity'}
+        >
           <ActivityIcon filled={isActivity} />
           <span className="text-[10px] font-medium">Activity</span>
         </button>
 
         <button
           onClick={onFABPress}
-          className="w-14 h-14 rounded-full bg-sky-500 shadow-lg flex items-center justify-center -mt-6 flex-shrink-0 active:scale-95 transition-transform"
+          className="mx-auto w-14 h-14 rounded-full bg-sky-500 shadow-lg flex items-center justify-center -mt-6 flex-shrink-0 active:scale-95 transition-transform"
           style={{ boxShadow: '0 4px 20px rgba(14, 165, 233, 0.45)' }}
+          aria-label="Add"
         >
           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -80,8 +100,17 @@ export default function BottomNav({ onFABPress, groupId }) {
         </button>
 
         <button
+          onClick={handleInsightsPress}
+          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isInsights ? 'text-sky-600' : 'text-gray-400'}`}
+          title={activeGroupId ? 'View group insights' : 'Insights require a group'}
+        >
+          <InsightsIcon filled={isInsights} />
+          <span className="text-[10px] font-medium">Insights</span>
+        </button>
+
+        <button
           onClick={() => navigate('/profile')}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isProfile ? 'text-sky-600' : 'text-gray-400'}`}
+          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl transition-all ${isProfile ? 'text-sky-600' : 'text-gray-400'}`}
         >
           <ProfileIcon filled={isProfile} />
           <span className="text-[10px] font-medium">Profile</span>

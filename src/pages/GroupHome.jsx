@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import BottomSheet from '../components/BottomSheet'
@@ -117,6 +117,8 @@ function ConnectTelegramSheet({
   settings,
   onToggleSetting,
   onRefreshCode,
+  botUsername,
+  onOpenTelegram,
 }) {
   const expiresAtLabel = codeExpiresAt ? new Date(codeExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
 
@@ -156,9 +158,10 @@ function ConnectTelegramSheet({
 
                 <>
                   <div className="space-y-3 text-sm text-gray-700">
-                    <p>
-                      <span className="font-semibold">1.</span> Add <span className="font-semibold">@kaki_split</span> to your Telegram group
-                    </p>
+                      <p>
+                        <span className="font-semibold">1.</span> Add <span className="font-semibold">@{botUsername || 'kaki_split_bot'}</span> to your Telegram group
+                      </p>
+
                     <div>
                       <p className="mb-2">
                         <span className="font-semibold">2.</span> Send this command in the group:
@@ -170,14 +173,18 @@ function ConnectTelegramSheet({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-sky-500 text-white font-bold text-sm active:scale-95 transition-transform">
-                      {copied ? 'Copied!' : 'Copy command'}
-                    </button>
-                    <button onClick={onRefreshCode} className="px-4 py-2.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
-                      Refresh code
-                    </button>
-                  </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-sky-500 text-white font-bold text-sm active:scale-95 transition-transform">
+                        {copied ? 'Copied!' : 'Copy command'}
+                      </button>
+                      <button onClick={onOpenTelegram} className="px-4 py-2.5 rounded-full border border-sky-200 text-sky-700 font-semibold text-sm">
+                        Open Telegram
+                      </button>
+                      <button onClick={onRefreshCode} className="px-4 py-2.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
+                        Refresh code
+                      </button>
+                    </div>
+
                 </>
 
 
@@ -186,17 +193,58 @@ function ConnectTelegramSheet({
                 <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               </div>
 
-              {isConnecting && <p className="text-xs text-gray-400">Listening for @kaki_split confirmation...</p>}
+                {isConnecting && <p className="text-xs text-gray-400">Listening for @{botUsername || 'kaki_split_bot'} confirmation...</p>}
+
             </div>
           )}
+      </div>
+    </BottomSheet>
+  )
+  }
+
+function TelegramOnboardingSheet({ isOpen, onClose, groupName, botUsername, code, codeExpiresAt, copied, onCopy, onOpenTelegram, onOpenConnect }) {
+  const expiresAtLabel = codeExpiresAt ? new Date(codeExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+
+  return (
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="Set up Telegram reminders">
+      <div className="px-5 py-4 pb-8 space-y-4">
+        <p className="text-sm text-gray-600 leading-relaxed">Want automatic debt reminders for {groupName}? Connect Telegram in under 1 minute.</p>
+
+        <div className="space-y-3 text-sm text-gray-700">
+          <p>
+            <span className="font-semibold">1.</span> Add <span className="font-semibold">@{botUsername || 'kaki_split_bot'}</span> into your Telegram group.
+          </p>
+          <p>
+            <span className="font-semibold">2.</span> Send this command in that group:
+          </p>
+          <div className="bg-sky-50 border border-sky-200 rounded-2xl px-4 py-5 text-center">
+            <span className="font-mono font-black text-xl tracking-wide text-sky-700">/link {code || '------'}</span>
+          </div>
+          {expiresAtLabel && <p className="text-xs text-gray-500">Code expires at {expiresAtLabel}</p>}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={onCopy} className="px-4 py-2.5 rounded-full bg-sky-500 text-white font-bold text-sm active:scale-95 transition-transform">
+            {copied ? 'Copied!' : 'Copy command'}
+          </button>
+          <button onClick={onOpenTelegram} className="px-4 py-2.5 rounded-full border border-sky-200 text-sky-700 font-semibold text-sm">
+            Open Telegram
+          </button>
+        </div>
+
+        <button onClick={onOpenConnect} className="w-full py-3.5 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm">
+          Open full Telegram settings
+        </button>
       </div>
     </BottomSheet>
   )
 }
 
 export default function GroupHome() {
+
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const showToast = useToast()
   const { user } = useAuth()
 
@@ -212,6 +260,7 @@ export default function GroupHome() {
   const [showQuickSplit, setShowQuickSplit] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showTelegramSheet, setShowTelegramSheet] = useState(false)
+  const [showTelegramOnboarding, setShowTelegramOnboarding] = useState(false)
   const [showEditGroupNameSheet, setShowEditGroupNameSheet] = useState(false)
   const [showReminderBanner, setShowReminderBanner] = useState(true)
   const [deletingGroup, setDeletingGroup] = useState(false)
@@ -233,11 +282,13 @@ export default function GroupHome() {
   const [telegramCode, setTelegramCode] = useState('')
   const [telegramCodeDisplay, setTelegramCodeDisplay] = useState('')
   const [telegramCodeExpiresAt, setTelegramCodeExpiresAt] = useState(null)
+  const [telegramBotUsername, setTelegramBotUsername] = useState('kaki_split_bot')
   const [telegramSettings, setTelegramSettings] = useState({
     expense_alerts_enabled: true,
     payment_alerts_enabled: true,
     daily_reminder_enabled: true,
   })
+  const onboardingHandledRef = useRef(false)
 
   const loadGroup = async () => {
     if (!id || !user?.id) return
@@ -293,7 +344,18 @@ export default function GroupHome() {
   }, [id, user?.id])
 
   useEffect(() => {
-    if (!showTelegramSheet || telegramConnected || !group || !user?.id) return
+    if (!group?.id || telegramConnected || onboardingHandledRef.current) return
+
+    const shouldPrompt = Boolean(location.state?.openTelegramOnboarding)
+    if (!shouldPrompt) return
+
+    onboardingHandledRef.current = true
+    setShowTelegramOnboarding(true)
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [group?.id, telegramConnected, location.pathname, location.state, navigate])
+
+  useEffect(() => {
+    if ((!showTelegramSheet && !showTelegramOnboarding) || telegramConnected || !group || !user?.id) return
 
     let cancelled = false
 
@@ -306,6 +368,7 @@ export default function GroupHome() {
           setTelegramCode(tokenData.token || '')
           setTelegramCodeDisplay(tokenData.token || tokenData.formattedToken || '')
           setTelegramCodeExpiresAt(tokenData.expiresAt || null)
+          setTelegramBotUsername(tokenData.botUsername || 'kaki_split_bot')
         }
       } catch (error) {
         if (!cancelled) {
@@ -324,6 +387,7 @@ export default function GroupHome() {
         if (!cancelled && data?.group?.telegram_connected) {
           setTelegramConnected(true)
           setTelegramGroupName(data.group.telegram_group_name || null)
+          setShowTelegramOnboarding(false)
           if (data.group.telegram_settings) {
             setTelegramSettings({
               expense_alerts_enabled: Boolean(data.group.telegram_settings.expense_alerts_enabled),
@@ -341,7 +405,7 @@ export default function GroupHome() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [showTelegramSheet, telegramConnected, group, user?.id, showToast])
+  }, [showTelegramSheet, showTelegramOnboarding, telegramConnected, group, user?.id, showToast])
 
   if (loading) {
     return (
@@ -454,26 +518,32 @@ export default function GroupHome() {
     }
   }
 
-  const handleRefreshTelegramCode = async () => {
-    if (!group?.id || !user?.id) return
+    const handleRefreshTelegramCode = async () => {
+      if (!group?.id || !user?.id) return
 
-    try {
-      setIsTelegramConnecting(true)
-      const tokenData = await createTelegramLinkToken({ groupId: group.id, createdBy: user.id })
-      setTelegramCode(tokenData.token || '')
-      setTelegramCodeDisplay(tokenData.formattedToken || tokenData.token || '')
-      setTelegramCodeExpiresAt(tokenData.expiresAt || null)
-      setTelegramCodeCopied(false)
-      showToast('New Telegram link code generated', 'success')
-    } catch (error) {
-      showToast(error.message || 'Unable to refresh Telegram code', 'error')
-    } finally {
-      setIsTelegramConnecting(false)
+      try {
+        setIsTelegramConnecting(true)
+        const tokenData = await createTelegramLinkToken({ groupId: group.id, createdBy: user.id })
+        setTelegramCode(tokenData.token || '')
+        setTelegramCodeDisplay(tokenData.formattedToken || tokenData.token || '')
+        setTelegramCodeExpiresAt(tokenData.expiresAt || null)
+        setTelegramBotUsername(tokenData.botUsername || 'kaki_split_bot')
+        setTelegramCodeCopied(false)
+        showToast('New Telegram link code generated', 'success')
+      } catch (error) {
+        showToast(error.message || 'Unable to refresh Telegram code', 'error')
+      } finally {
+        setIsTelegramConnecting(false)
+      }
     }
-  }
 
+    const handleOpenTelegram = () => {
+      const username = String(telegramBotUsername || '').trim() || 'kaki_split_bot'
+      window.open(`https://t.me/${username}`, '_blank', 'noopener,noreferrer')
+    }
 
-  const handleCopyTelegramCode = async () => {
+    const handleCopyTelegramCode = async () => {
+
     const command = telegramCode ? `/link ${telegramCode}` : ''
     try {
       if (!command) {
@@ -673,8 +743,24 @@ export default function GroupHome() {
         </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-3">
-        {debtReminder && showReminderBanner && (
+        <div className="px-4 pt-4 space-y-3">
+          {!telegramConnected && (
+            <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3.5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sky-900 text-sm font-semibold">Connect Telegram for reminders</p>
+                <p className="text-sky-700 text-xs mt-0.5">Add @{telegramBotUsername} to your group and link with your code.</p>
+              </div>
+              <button
+                onClick={() => setShowTelegramSheet(true)}
+                className="px-3 py-2 rounded-full bg-white border border-sky-200 text-sky-700 text-xs font-bold flex-shrink-0"
+              >
+                Connect
+              </button>
+            </div>
+          )}
+
+          {debtReminder && showReminderBanner && (
+
           <div className="relative bg-amber-50 border border-amber-200 rounded-2xl p-3.5 pr-10">
             <button onClick={() => setShowReminderBanner(false)} className="absolute top-2 right-2 text-amber-500 text-xs" aria-label="Dismiss reminder">
               ✕
@@ -960,26 +1046,43 @@ export default function GroupHome() {
           </div>
         </BottomSheet>
 
-        <ConnectTelegramSheet
+          <ConnectTelegramSheet
+            isOpen={showTelegramSheet}
+            onClose={() => setShowTelegramSheet(false)}
+            groupName={group.name}
+            isConnected={telegramConnected}
+            telegramGroupName={telegramGroupName}
+            isConnecting={isTelegramConnecting}
+            code={telegramCodeDisplay}
+            codeExpiresAt={telegramCodeExpiresAt}
+            onCopy={handleCopyTelegramCode}
+            copied={telegramCodeCopied}
+            onDisconnect={handleDisconnectTelegram}
+            settings={telegramSettings}
+            onToggleSetting={handleToggleTelegramSetting}
+            onRefreshCode={handleRefreshTelegramCode}
+            botUsername={telegramBotUsername}
+            onOpenTelegram={handleOpenTelegram}
+          />
 
+          <TelegramOnboardingSheet
+            isOpen={showTelegramOnboarding && !telegramConnected}
+            onClose={() => setShowTelegramOnboarding(false)}
+            groupName={group.name}
+            botUsername={telegramBotUsername}
+            code={telegramCodeDisplay}
+            codeExpiresAt={telegramCodeExpiresAt}
+            copied={telegramCodeCopied}
+            onCopy={handleCopyTelegramCode}
+            onOpenTelegram={handleOpenTelegram}
+            onOpenConnect={() => {
+              setShowTelegramOnboarding(false)
+              setShowTelegramSheet(true)
+            }}
+          />
 
-          isOpen={showTelegramSheet}
-          onClose={() => setShowTelegramSheet(false)}
-          groupName={group.name}
-          isConnected={telegramConnected}
-          telegramGroupName={telegramGroupName}
-          isConnecting={isTelegramConnecting}
-          code={telegramCodeDisplay}
-          codeExpiresAt={telegramCodeExpiresAt}
-          onCopy={handleCopyTelegramCode}
-          copied={telegramCodeCopied}
-          onDisconnect={handleDisconnectTelegram}
-          settings={telegramSettings}
-          onToggleSetting={handleToggleTelegramSetting}
-          onRefreshCode={handleRefreshTelegramCode}
-        />
+        </div>
 
-      </div>
 
   )
 }

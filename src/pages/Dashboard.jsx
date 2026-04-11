@@ -122,7 +122,10 @@ export default function Dashboard() {
       const data = await fetchDashboardData(user.id)
       setGroups(data.groups)
       setUsersById(data.usersById)
-      navigate(`/groups/${newGroup.id}`)
+        navigate(`/groups/${newGroup.id}`, {
+          state: { openTelegramOnboarding: true },
+        })
+
     } catch (error) {
       showToast(error.message || 'Unable to create group', 'error')
     } finally {

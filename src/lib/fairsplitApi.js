@@ -7,7 +7,7 @@ const PROFILE_COLUMNS = 'id,display_name,email,avatar_url,avatar_color,paynow_nu
 const TELEGRAM_TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const TELEGRAM_LINK_TOKEN_LENGTH = 6
 const TELEGRAM_LINK_TOKEN_TTL_MINUTES = 30
-const TELEGRAM_BOT_USERNAME = 'kaki_split'
+const TELEGRAM_BOT_USERNAME = 'kaki_split_bot'
 
 const AVATAR_COLORS = ['#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#3b82f6', '#14b8a6']
 
