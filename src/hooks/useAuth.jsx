@@ -231,11 +231,19 @@ export function AuthProvider({ children }) {
 
     if (error) throw error
 
+    const identities = Array.isArray(data?.user?.identities) ? data.user.identities : null
+    const isExistingUser = Boolean(data?.user && identities && identities.length === 0)
+    const emailConfirmationSent = Boolean(data?.user?.confirmation_sent_at)
+
     // Profile row creation is deferred to onAuthStateChange after the user
     // has a confirmed session. Calling ensureProfileRow here (pre-confirmation)
     // has no auth JWT and will be blocked by RLS.
 
-    return data
+    return {
+      ...data,
+      isExistingUser,
+      emailConfirmationSent,
+    }
   }, [])
 
   const signInWithGoogle = useCallback(async ({ redirectPath = '/dashboard' } = {}) => {

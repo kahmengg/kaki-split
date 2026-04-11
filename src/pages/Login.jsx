@@ -53,9 +53,31 @@ export default function Login() {
 
     try {
       if (mode === 'signup') {
-        await signUp({ email, password, name })
-        setPendingVerificationEmail(String(email || '').trim().toLowerCase())
-        showToast('Account created! Check your email to confirm, then sign in.', 'success')
+        const result = await signUp({ email, password, name })
+        const normalizedEmail = String(email || '').trim().toLowerCase()
+        const hasGoogleIdentity = Array.isArray(result?.user?.identities)
+          ? result.user.identities.some((identity) => identity?.provider === 'google')
+          : false
+
+        if (result?.isExistingUser) {
+          if (hasGoogleIdentity) {
+            showToast('This email already uses Google sign-in. Please continue with Google.', 'error')
+          } else {
+            showToast('This email is already registered. Please sign in instead.', 'error')
+          }
+          setMode('login')
+          setPendingVerificationEmail('')
+          setPassword('')
+          return
+        }
+
+        if (!result?.emailConfirmationSent) {
+          showToast('Signup received, but verification email was not sent yet. Please wait a minute and tap resend.', 'error')
+        } else {
+          showToast('Account created! Check your email to confirm, then sign in.', 'success')
+        }
+
+        setPendingVerificationEmail(normalizedEmail)
         setMode('login')
         setPassword('')
       } else {
