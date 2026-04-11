@@ -878,16 +878,7 @@ export default function GroupHome() {
             <span className="font-semibold text-gray-800 text-sm">Edit group name</span>
           </button>
 
-            <button
-              onClick={() => {
-                setShowMenu(false)
-                navigate(`/groups/${id}/insights`)
-              }}
-              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
-            >
-              <span className="text-xl w-8 text-center">📊</span>
-              <span className="font-semibold text-gray-800 text-sm">Insights</span>
-            </button>
+
 
               <button
                 onClick={() => {

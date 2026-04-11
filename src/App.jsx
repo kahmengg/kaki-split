@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import GroupHome from './pages/GroupHome'
 import PayScreen from './pages/Pay'
 import Insights from './pages/Insights'
+import InsightsPicker from './pages/InsightsPicker'
 import TripSummary from './pages/TripSummary'
 import Activity from './pages/Activity'
 import Profile from './pages/Profile'
@@ -103,14 +104,23 @@ export default function App() {
               </RequireAuth>
             }
           />
-          <Route
-            path="/groups/:id/insights"
-            element={
-              <RequireAuth>
-                <Insights />
-              </RequireAuth>
-            }
-          />
+            <Route
+              path="/insights"
+              element={
+                <RequireAuth>
+                  <InsightsPicker />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/groups/:id/insights"
+              element={
+                <RequireAuth>
+                  <Insights />
+                </RequireAuth>
+              }
+            />
+
           <Route
             path="/groups/:id/summary"
             element={

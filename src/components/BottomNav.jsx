@@ -50,22 +50,11 @@ export default function BottomNav({ onFABPress, groupId }) {
 
   const isHome = path === '/dashboard' || path === '/'
   const isActivity = path === '/activity'
-  const isInsights = /^\/groups\/[^/]+\/insights$/.test(path)
+  const isInsights = path === '/insights' || /^\/groups\/[^/]+\/insights$/.test(path)
   const isProfile = path === '/profile'
 
   const handleInsightsPress = () => {
-    if (activeGroupId) {
-      navigate(`/groups/${activeGroupId}/insights`)
-      return
-    }
-
-    const lastGroupId = localStorage.getItem('kakisplit:lastGroupId')
-    if (lastGroupId) {
-      navigate(`/groups/${lastGroupId}/insights`)
-      return
-    }
-
-    navigate('/dashboard')
+    navigate('/insights')
   }
 
   return (

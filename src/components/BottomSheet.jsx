@@ -17,11 +17,12 @@ export default function BottomSheet({ isOpen, onClose, children, title, height =
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/40 z-40 backdrop-blur-[2px]"
-        onClick={onClose}
-        style={{ maxWidth: '430px', left: '50%', transform: 'translateX(-50%)' }}
-      />
+        <div
+          className="fixed inset-0 bg-black/10 z-40"
+          onClick={onClose}
+          style={{ maxWidth: '430px', left: '50%', transform: 'translateX(-50%)' }}
+        />
+
 
       {/* Sheet */}
         <div
