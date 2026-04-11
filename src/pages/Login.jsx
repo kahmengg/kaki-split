@@ -27,10 +27,15 @@ export default function Login() {
     return fromStorage ? String(fromStorage).trim().toUpperCase() : ''
   }, [location.search])
 
-  const oauthRedirectPath = useMemo(() => {
+  const postAuthPath = useMemo(() => {
     if (pendingInviteCode) return `/join/${encodeURIComponent(pendingInviteCode)}`
     return '/dashboard'
   }, [pendingInviteCode])
+
+  const verificationRedirectPath = useMemo(() => {
+    const encodedNext = encodeURIComponent(postAuthPath)
+    return `/auth/verified?next=${encodedNext}`
+  }, [postAuthPath])
 
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -53,7 +58,8 @@ export default function Login() {
 
     try {
       if (mode === 'signup') {
-        const result = await signUp({ email, password, name })
+          const result = await signUp({ email, password, name, redirectPath: verificationRedirectPath })
+
         const normalizedEmail = String(email || '').trim().toLowerCase()
         const hasGoogleIdentity = Array.isArray(result?.user?.identities)
           ? result.user.identities.some((identity) => identity?.provider === 'google')
@@ -82,13 +88,10 @@ export default function Login() {
         setPassword('')
       } else {
         await signIn({ email, password })
-        setPendingVerificationEmail('')
-        showToast('Signed in successfully', 'success')
-        if (pendingInviteCode) {
-          navigate(`/join/${encodeURIComponent(pendingInviteCode)}`)
-        } else {
-          navigate('/dashboard')
-        }
+          setPendingVerificationEmail('')
+          showToast('Signed in successfully', 'success')
+          navigate(postAuthPath)
+
       }
     } catch (error) {
       if (mode === 'login' && isEmailConfirmationRequiredError(error)) {
@@ -108,7 +111,8 @@ export default function Login() {
 
     setResendingVerification(true)
     try {
-      await resendSignupConfirmation({ email: pendingVerificationEmail, redirectPath: '/login' })
+        await resendSignupConfirmation({ email: pendingVerificationEmail, redirectPath: verificationRedirectPath })
+
       showToast(`Verification email sent to ${pendingVerificationEmail}.`, 'success')
     } catch (error) {
       showToast(error.message || 'Unable to resend verification email right now.', 'error')
@@ -121,7 +125,8 @@ export default function Login() {
     setLoadingSource('google')
     setLoading(true)
     try {
-      await signInWithGoogle({ redirectPath: oauthRedirectPath })
+        await signInWithGoogle({ redirectPath: postAuthPath })
+
     } catch (error) {
       showToast(error.message || 'Google sign-in failed. Please use email & password.', 'error')
       setLoading(false)

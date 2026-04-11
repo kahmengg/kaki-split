@@ -14,6 +14,7 @@ import Profile from './pages/Profile'
 import JoinInvite from './pages/JoinInvite'
 import Terms from './pages/Terms'
 import Privacy from './pages/Privacy'
+import AuthVerified from './pages/AuthVerified'
 
 function RequireAuth({ children }) {
   const { user, loading, session } = useAuth()
@@ -74,8 +75,10 @@ export default function App() {
                 </PublicOnly>
               }
             />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/auth/verified" element={<AuthVerified />} />
+
 
 
             <Route
