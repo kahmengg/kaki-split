@@ -8,7 +8,6 @@ export const CURRENT_USER = {
   avatar_url: null,
   avatar_color: '#10b981',
   paynow_number: '+6591234567',
-  grabpay_handle: 'alexchen',
   paylah_handle: null,
 }
 
@@ -22,7 +21,6 @@ export const USERS = {
     avatar_url: null,
     avatar_color: '#8b5cf6',
     paynow_number: '+6598765432',
-    grabpay_handle: null,
     paylah_handle: 'sarahlim',
   },
   'user-3': {
@@ -33,7 +31,6 @@ export const USERS = {
     avatar_url: null,
     avatar_color: '#f59e0b',
     paynow_number: '+6581234567',
-    grabpay_handle: 'marcustan',
     paylah_handle: null,
   },
   'user-4': {
@@ -44,7 +41,6 @@ export const USERS = {
     avatar_url: null,
     avatar_color: '#ef4444',
     paynow_number: '+6592345678',
-    grabpay_handle: null,
     paylah_handle: null,
   },
   'user-5': {
@@ -55,7 +51,6 @@ export const USERS = {
     avatar_url: null,
     avatar_color: '#3b82f6',
     paynow_number: null,
-    grabpay_handle: 'jamiew',
     paylah_handle: 'jamiewong',
   },
 }

@@ -7,7 +7,6 @@ create table if not exists public.profiles (
   avatar_url text,
   avatar_color text,
   paynow_number text,
-  grabpay_handle text,
   paylah_handle text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

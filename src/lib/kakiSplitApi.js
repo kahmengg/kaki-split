@@ -3,7 +3,7 @@ import { computeNetBalances, settleNetBalances } from './balances'
 
 const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
-const PROFILE_COLUMNS = 'id,display_name,email,avatar_url,avatar_color,paynow_number,grabpay_handle,paylah_handle'
+const PROFILE_COLUMNS = 'id,display_name,email,avatar_url,avatar_color,paynow_number,paylah_handle'
 const TELEGRAM_TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const TELEGRAM_LINK_TOKEN_LENGTH = 6
 const TELEGRAM_LINK_TOKEN_TTL_MINUTES = 30
