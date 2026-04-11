@@ -16,7 +16,7 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const showToast = useToast()
-  const { signIn, signUp, signInWithGoogle } = useAuth()
+  const { signIn, signUp, signInWithGoogle, resendSignupConfirmation } = useAuth()
   const { isDark } = useTheme()
 
   const pendingInviteCode = useMemo(() => {
@@ -38,6 +38,13 @@ export default function Login() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingSource, setLoadingSource] = useState('password')
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
+  const [resendingVerification, setResendingVerification] = useState(false)
+
+  const isEmailConfirmationRequiredError = (error) => {
+    const message = String(error?.message || '').toLowerCase()
+    return message.includes('email not confirmed') || message.includes('email not verified')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -47,23 +54,44 @@ export default function Login() {
     try {
       if (mode === 'signup') {
         await signUp({ email, password, name })
+        setPendingVerificationEmail(String(email || '').trim().toLowerCase())
         showToast('Account created! Check your email to confirm, then sign in.', 'success')
         setMode('login')
         setPassword('')
+      } else {
+        await signIn({ email, password })
+        setPendingVerificationEmail('')
+        showToast('Signed in successfully', 'success')
+        if (pendingInviteCode) {
+          navigate(`/join/${encodeURIComponent(pendingInviteCode)}`)
         } else {
-          await signIn({ email, password })
-          showToast('Signed in successfully', 'success')
-          if (pendingInviteCode) {
-            navigate(`/join/${encodeURIComponent(pendingInviteCode)}`)
-          } else {
-            navigate('/dashboard')
-          }
+          navigate('/dashboard')
         }
-
+      }
     } catch (error) {
-      showToast(error.message || 'Unable to authenticate right now', 'error')
+      if (mode === 'login' && isEmailConfirmationRequiredError(error)) {
+        const normalizedEmail = String(email || '').trim().toLowerCase()
+        if (normalizedEmail) setPendingVerificationEmail(normalizedEmail)
+        showToast('Please verify your email before signing in. You can resend the verification email below.', 'error')
+      } else {
+        showToast(error.message || 'Unable to authenticate right now', 'error')
+      }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    if (!pendingVerificationEmail || resendingVerification) return
+
+    setResendingVerification(true)
+    try {
+      await resendSignupConfirmation({ email: pendingVerificationEmail, redirectPath: '/login' })
+      showToast(`Verification email sent to ${pendingVerificationEmail}.`, 'success')
+    } catch (error) {
+      showToast(error.message || 'Unable to resend verification email right now.', 'error')
+    } finally {
+      setResendingVerification(false)
     }
   }
 
@@ -269,19 +297,35 @@ export default function Login() {
                 'Sign in'
               )}
             </button>
-          </form>
+            </form>
 
-            <p className="text-center text-xs text-gray-400 mt-4">
-              By continuing, you agree to our{' '}
-              <Link to="/terms" className="font-semibold text-sky-600 hover:text-sky-700">
-                Terms
-              </Link>{' '}
-              and{' '}
-              <Link to="/privacy" className="font-semibold text-sky-600 hover:text-sky-700">
-                Privacy Policy
-              </Link>
-              .
-            </p>
+            {pendingVerificationEmail && mode === 'login' && (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <p className="text-[11px] text-amber-800">
+                  Not verified yet? We can resend the confirmation link to <span className="font-semibold">{pendingVerificationEmail}</span>.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendingVerification}
+                  className="mt-2 inline-flex items-center justify-center rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+                >
+                  {resendingVerification ? 'Sending...' : 'Resend verification email'}
+                </button>
+              </div>
+            )}
+  
+              <p className="text-center text-xs text-gray-400 mt-4">
+                By continuing, you agree to our{' '}
+                <Link to="/terms" className="font-semibold text-sky-600 hover:text-sky-700">
+                  Terms
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" className="font-semibold text-sky-600 hover:text-sky-700">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
 
         </section>
       </div>

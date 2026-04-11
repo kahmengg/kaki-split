@@ -231,6 +231,22 @@ export function AuthProvider({ children }) {
     return data
   }, [])
 
+  const resendSignupConfirmation = useCallback(async ({ email, redirectPath = '/login' }) => {
+    const normalizedEmail = String(email || '').trim()
+    if (!normalizedEmail) throw new Error('Email is required to resend confirmation.')
+
+    const normalizedPath = typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/login'
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}${normalizedPath}`,
+      },
+    })
+
+    if (error) throw error
+  }, [])
+
   const signOut = useCallback(async () => {
     const { error } = await withAuthLockRetry(() => supabase.auth.signOut())
     if (error) throw error
@@ -251,10 +267,11 @@ export function AuthProvider({ children }) {
       signIn,
       signUp,
       signInWithGoogle,
+      resendSignupConfirmation,
       signOut,
       refreshProfile,
     }),
-    [authError, loading, profile, refreshProfile, session, signIn, signInWithGoogle, signOut, signUp, user]
+    [authError, loading, profile, refreshProfile, resendSignupConfirmation, session, signIn, signInWithGoogle, signOut, signUp, user]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
