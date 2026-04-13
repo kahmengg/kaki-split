@@ -7,9 +7,15 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 
 const socialProof = [
-  { label: 'Groups active', value: '2.4k+' },
-  { label: 'Avg. settle time', value: '< 24h' },
-  { label: 'Payment disputes', value: '-78%' },
+  { label: 'Add expenses in seconds', value: 'Fast' },
+  { label: 'Clear balances', value: 'Simple' },
+  { label: 'Group-first flow', value: 'Friendly' },
+]
+
+const whyKakiSplit = [
+  'Built for roommates and trips, not accounting spreadsheets.',
+  'Less tapping, less confusion, and cleaner settle-up summaries.',
+  'Made for your group style, with a lighter and friendlier flow.',
 ]
 
 export default function Login() {
@@ -192,14 +198,15 @@ export default function Login() {
               </div>
 
               <h1 className={`text-[1.8rem] font-black leading-tight tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                Keep trips fun.
-                <span className="block text-sky-500">No awkward money chasing.</span>
-              </h1>
+                  Why KakiSplit?
+                  <span className="block text-sky-500">Split fast. Stay friends.</span>
+                </h1>
 
-              <p className={`text-sm leading-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                Built for roommates and travel squads. Add expenses in seconds, auto-calculate balances,
-                and settle up with clarity.
-              </p>
+                <p className={`text-sm leading-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Splitwise is great for general expense tracking. KakiSplit is focused on tighter group flows,
+                  so shared spending feels quicker, clearer, and less awkward.
+                </p>
+
 
               {pendingInviteCode && (
                 <div className={`rounded-2xl border px-3 py-2 ${isDark ? 'border-sky-700/70 bg-sky-900/25' : 'border-sky-200 bg-sky-50'}`}>
@@ -208,14 +215,24 @@ export default function Login() {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-2">
-                {socialProof.map((item) => (
-                  <div key={item.label} className={`rounded-xl border px-2.5 py-2 text-center ${isDark ? 'border-slate-600 bg-slate-800' : 'border-sky-100 bg-white shadow-sm'}`}>
-                    <p className={`text-sm font-black leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</p>
-                    <p className={`text-[10px] mt-1 leading-tight ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</p>
-                  </div>
-                ))}
-              </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {socialProof.map((item) => (
+                    <div key={item.label} className={`rounded-xl border px-2.5 py-2 text-center ${isDark ? 'border-slate-600 bg-slate-800' : 'border-sky-100 bg-white shadow-sm'}`}>
+                      <p className={`text-sm font-black leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</p>
+                      <p className={`text-[10px] mt-1 leading-tight ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <ul className="space-y-1.5">
+                  {whyKakiSplit.map((point) => (
+                    <li key={point} className={`flex items-start gap-2 text-xs leading-5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-500" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+
             </section>
 
           <section className={`rounded-[28px] text-gray-900 border p-5 backdrop-blur-sm ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white/95 border-sky-100 shadow-[0_18px_40px_rgba(14,165,233,0.12)]'}`}>

@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/telegram/daily",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/telegram/daily",
