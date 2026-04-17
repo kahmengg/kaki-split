@@ -57,7 +57,6 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
   const [submitting, setSubmitting] = useState(false)
   const [receiptData, setReceiptData] = useState(null)
   const [showAssigner, setShowAssigner] = useState(false)
-  const [useItemizedSplit, setUseItemizedSplit] = useState(false)
   const [sharedItems, setSharedItems] = useState([])
   const fileInputRef = useRef(null)
   const amountRef = useRef(null)
@@ -100,17 +99,6 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
   const allMemberIds = useMemo(() => members.map((member) => member.id), [members])
 
   const itemizedPreview = useMemo(() => {
-    if (!useItemizedSplit) {
-      return {
-        splitMembers: [],
-        splitValues: {},
-        total: 0,
-        missingMemberItems: 0,
-        missingAmountItems: 0,
-        hasInvalidAmount: false,
-      }
-    }
-
     const totalsByMemberCents = {}
     let totalCents = 0
     let missingMemberItems = 0
@@ -158,64 +146,75 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
       missingAmountItems,
       hasInvalidAmount,
     }
-  }, [allMemberIds, sharedItems, useItemizedSplit])
+  }, [allMemberIds, sharedItems])
 
   const selectedMembers = useMemo(
     () => members.filter((member) => splitMembers.includes(member.id)),
     [members, splitMembers]
   )
+  const sharedItemMemberChoices = selectedMembers.length > 0 ? selectedMembers : members
 
   const perPersonAmount = useMemo(() => {
     if (!numericAmount || splitMembers.length === 0) return '0.00'
     return (numericAmount / splitMembers.length).toFixed(2)
   }, [numericAmount, splitMembers.length])
 
-  const exactSum = useMemo(() => {
-    if (splitType !== 'exact') return 0
-    return round2(selectedMembers.reduce((sum, member) => sum + Number(splitValues[member.id] || 0), 0))
-  }, [splitType, selectedMembers, splitValues])
-
   const percentSum = useMemo(() => {
     if (splitType !== 'percent') return 0
     return round2(selectedMembers.reduce((sum, member) => sum + Number(splitValues[member.id] || 0), 0))
   }, [splitType, selectedMembers, splitValues])
 
-  const splitValidationMessage = useMemo(() => {
-    if (useItemizedSplit) {
-      if (sharedItems.length === 0) return 'Add at least one item'
-      if (itemizedPreview.missingAmountItems > 0) return 'Enter an amount for each item'
-      if (itemizedPreview.hasInvalidAmount) return 'Item amounts must be greater than 0'
-      if (itemizedPreview.missingMemberItems > 0) return 'Choose at least one person for each item'
-      if (itemizedPreview.splitMembers.length === 0 || itemizedPreview.total <= 0) return 'Add item amounts to continue'
-      if (Math.abs(round2(itemizedPreview.total) - round2(numericAmount)) > 0.01) {
-        return `Item total must match ${formatMoney(numericAmount, currency)}`
-      }
-      return null
+  const combinedExactValues = useMemo(() => {
+    const next = {}
+
+    for (const member of selectedMembers) {
+      next[member.id] = Number(splitValues[member.id] || 0)
     }
 
+    for (const memberId of itemizedPreview.splitMembers) {
+      next[memberId] = Number(next[memberId] || 0) + Number(itemizedPreview.splitValues[memberId] || 0)
+    }
+
+    return next
+  }, [itemizedPreview.splitMembers, itemizedPreview.splitValues, selectedMembers, splitValues])
+
+  const combinedExactSum = useMemo(
+    () => round2(Object.values(combinedExactValues).reduce((sum, value) => sum + Number(value || 0), 0)),
+    [combinedExactValues]
+  )
+
+  const splitValidationMessage = useMemo(() => {
     if (splitMembers.length === 0) return 'Choose at least one member'
     if (!numericAmount || numericAmount <= 0) return 'Enter a valid amount'
-    if (splitType === 'exact' && exactSum !== round2(numericAmount)) {
-      return `Exact amounts must total ${formatMoney(numericAmount, currency)}`
+
+    if (splitType === 'exact') {
+      if (sharedItems.length > 0) {
+        if (itemizedPreview.missingAmountItems > 0) return 'Enter an amount for each shared item'
+        if (itemizedPreview.hasInvalidAmount) return 'Shared item amounts must be greater than 0'
+        if (itemizedPreview.missingMemberItems > 0) return 'Choose at least one person for each shared item'
+      }
+
+      if (combinedExactSum !== round2(numericAmount)) {
+        return `Exact + shared items must total ${formatMoney(numericAmount, currency)}`
+      }
     }
+
     if (splitType === 'percent' && percentSum !== 100) {
       return 'Percentages must total 100%'
     }
+
     return null
   }, [
+    combinedExactSum,
     currency,
-    exactSum,
     itemizedPreview.hasInvalidAmount,
     itemizedPreview.missingAmountItems,
     itemizedPreview.missingMemberItems,
-    itemizedPreview.splitMembers.length,
-    itemizedPreview.total,
     numericAmount,
     percentSum,
     sharedItems.length,
     splitMembers.length,
     splitType,
-    useItemizedSplit,
   ])
 
   const canSubmit = Boolean(amount && description.trim() && !splitValidationMessage && !submitting)
@@ -305,39 +304,36 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
     setSharedItems((prev) => prev.filter((item) => item.id !== itemId))
   }
 
-  const applyItemizedMode = () => {
-    setUseItemizedSplit(true)
-    setSplitType('exact')
-    setSharedItems((prev) => (prev.length > 0 ? prev : [createSharedItem(1)]))
-  }
-
-  const disableItemizedMode = () => {
-    setUseItemizedSplit(false)
-  }
-
   const handleSubmit = async () => {
     if (!canSubmit || submitInFlightRef.current) return
 
     submitInFlightRef.current = true
     setSubmitting(true)
     try {
-      const activeSplitMembers = useItemizedSplit ? itemizedPreview.splitMembers : splitMembers
-      const activeSplitValues = useItemizedSplit ? itemizedPreview.splitValues : splitValues
-      const payloadSplitValues = activeSplitMembers.reduce((acc, userId) => {
-        acc[userId] = activeSplitValues[userId] || '0'
-        return acc
-      }, {})
+        const activeSplitMembers = splitType === 'exact'
+          ? Object.keys(combinedExactValues).filter((userId) => Number(combinedExactValues[userId] || 0) > 0)
+          : splitMembers
 
-      await onSubmit({
-        amount: parseFloat(amount),
-        description: description.trim(),
-        category,
-        paid_by: paidBy,
-        split_members: activeSplitMembers,
-        split_type: useItemizedSplit ? 'exact' : splitType,
-        split_values: payloadSplitValues,
-        currency,
-      })
+        const payloadSplitValues = activeSplitMembers.reduce((acc, userId) => {
+          if (splitType === 'exact') {
+            acc[userId] = Number(combinedExactValues[userId] || 0).toFixed(2)
+          } else {
+            acc[userId] = splitValues[userId] || '0'
+          }
+          return acc
+        }, {})
+
+        await onSubmit({
+          amount: parseFloat(amount),
+          description: description.trim(),
+          category,
+          paid_by: paidBy,
+          split_members: activeSplitMembers,
+          split_type: splitType,
+          split_values: payloadSplitValues,
+          currency,
+        })
+
     } finally {
       submitInFlightRef.current = false
       setSubmitting(false)
@@ -386,9 +382,9 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
     if (Number.isFinite(nextAmount) && nextAmount > 0) setAmount(String(round2(nextAmount)))
     if (nextCurrency) setCurrency(nextCurrency)
 
-    setUseItemizedSplit(false)
-    setSharedItems([])
-    setSplitType('exact')
+      setSharedItems([])
+      setSplitType('exact')
+
     setSplitMembers(nextSplits.map((item) => item.memberId))
     setSplitValues(
       nextSplits.reduce((acc, item) => {
@@ -422,7 +418,8 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
               className="bg-transparent text-5xl font-black text-gray-900 text-center focus:outline-none w-44 placeholder-gray-300"
             />
         </div>
-          {!useItemizedSplit && amount && splitMembers.length > 1 && splitType === 'equal' && (
+            {amount && splitMembers.length > 1 && splitType === 'equal' && (
+
             <p className="text-sky-600 text-sm font-medium mt-1">
               {formatMoney(perPersonAmount, currency)} each · {splitMembers.length} people
             </p>
@@ -534,213 +531,181 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
           </div>
         </div>
 
-          <div>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">How to split</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={disableItemizedMode}
-                className={`py-2.5 rounded-2xl border-2 text-sm font-semibold transition ${
-                  !useItemizedSplit ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 bg-white text-gray-600'
-                }`}
-              >
-                Simple split
-              </button>
-              <button
-                type="button"
-                onClick={applyItemizedMode}
-                className={`py-2.5 rounded-2xl border-2 text-sm font-semibold transition ${
-                  useItemizedSplit ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 bg-white text-gray-600'
-                }`}
-              >
-                By items
-              </button>
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Split type</p>
+              <div className="flex bg-gray-100 rounded-2xl p-1">
+                {SPLIT_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleSplitTypeChange(type.id)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      splitType === type.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              {useItemizedSplit ? 'Great for dishes like fries shared by specific people.' : 'Split the full total directly.'}
-            </p>
-          </div>
 
-          {useItemizedSplit ? (
-            <div className="space-y-3 rounded-2xl border border-sky-100 bg-sky-50/40 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Shared items</p>
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Shared items (optional)</p>
                 <button
                   type="button"
                   onClick={addSharedItemRow}
-                  className="px-3 py-1.5 rounded-full bg-white border border-sky-200 text-sky-700 text-xs font-semibold"
+                  disabled={splitType !== 'exact'}
+                  className="px-3 py-1.5 rounded-full bg-white border border-sky-200 text-sky-700 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  + Add item
+                  + Add shared item
                 </button>
               </div>
-
-              {sharedItems.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={addSharedItemRow}
-                  className="w-full py-3 rounded-2xl border border-dashed border-sky-300 text-sky-700 text-sm font-semibold bg-white"
-                >
-                  Add first item
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  {sharedItems.map((item, index) => (
-                    <div key={item.id} className="rounded-2xl bg-white border border-sky-100 p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(event) => handleSharedItemChange(item.id, 'name', event.target.value)}
-                          placeholder={`Item ${index + 1} (e.g. Fries)`}
-                          className="flex-1 min-w-0 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                        />
-                        <div className="flex items-center gap-1 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-xl">
-                          <span className="text-[10px] text-gray-500 font-semibold">{currency}</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={item.amount}
-                            onChange={(event) => handleSharedItemChange(item.id, 'amount', event.target.value)}
-                            placeholder="0.00"
-                            className="w-16 bg-transparent text-right text-sm font-semibold text-gray-800 focus:outline-none"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeSharedItemRow(item.id)}
-                          className="w-8 h-8 rounded-full border border-gray-200 text-gray-500 text-sm"
-                          aria-label={`Remove item ${index + 1}`}
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1.5">
-                        {members.map((member) => {
-                          const selected = (item.memberIds || []).includes(member.id)
-                          return (
-                            <button
-                              key={`${item.id}-${member.id}`}
-                              type="button"
-                              onClick={() => toggleSharedItemMember(item.id, member.id)}
-                              className={`px-2.5 py-1.5 rounded-full text-xs font-semibold border transition ${
-                                selected ? 'border-sky-400 bg-sky-50 text-sky-700' : 'border-gray-200 bg-white text-gray-600'
-                              }`}
-                            >
-                              {member.id === currentUserId ? 'You' : member.display_name.split(' ')[0]}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              {splitType !== 'exact' && (
+                <p className="text-xs text-gray-500">Shared items work with Exact split only.</p>
               )}
 
-              <div className="rounded-2xl border border-sky-100 bg-white p-3 space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
-                  <span>Items total</span>
-                  <span>{formatMoney(itemizedPreview.total, currency)}</span>
-                </div>
-                {members
-                  .filter((member) => itemizedPreview.splitMembers.includes(member.id))
-                  .map((member) => (
-                    <div key={`itemized-preview-${member.id}`} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700">{member.id === currentUserId ? 'You' : member.display_name}</span>
-                      <span className="font-semibold text-sky-700">{formatMoney(Number(itemizedPreview.splitValues[member.id] || 0), currency)}</span>
-                    </div>
-                  ))}
-                <button
-                  type="button"
-                  onClick={() => setAmount(itemizedPreview.total ? String(round2(itemizedPreview.total)) : '')}
-                  className="w-full mt-1 py-2 rounded-xl border border-sky-200 text-sky-700 text-xs font-semibold"
-                >
-                  Use items total as amount
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Split between</p>
-                <div className="flex gap-2 flex-wrap">
-                  {members.map((member) => {
-                    const included = splitMembers.includes(member.id)
-                    return (
-                      <button
-                        key={member.id}
-                        onClick={() => toggleMember(member.id)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-2xl border-2 transition-all ${
-                          included ? 'border-sky-500 bg-sky-50' : 'border-gray-200 bg-white opacity-50'
-                        }`}
-                      >
-                        <Avatar user={member} size="xs" />
-                        <span className={`text-sm font-semibold ${included ? 'text-sky-700' : 'text-gray-500'}`}>
-                          {member.id === currentUserId ? 'You' : member.display_name}
-                        </span>
-                        {included && <span className="text-sky-500 text-xs">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Split type</p>
-                <div className="flex bg-gray-100 rounded-2xl p-1">
-                  {SPLIT_TYPES.map((type) => (
-                    <button
-                      key={type.id}
-                      onClick={() => handleSplitTypeChange(type.id)}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                        splitType === type.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                      }`}
-                    >
-                      {type.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {splitType !== 'equal' && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                      {splitType === 'exact' ? 'Exact amounts' : 'Percentages'}
-                    </p>
-                    <p className="text-xs font-semibold text-gray-400">
-                      {splitType === 'exact'
-                        ? `${formatMoney(exactSum, currency)} / ${formatMoney(numericAmount || 0, currency)}`
-                        : `${percentSum.toFixed(2)}% / 100%`}
-                    </p>
-                  </div>
-
+              {splitType === 'exact' && sharedItems.length > 0 && (
+                <div className="space-y-3 rounded-2xl border border-sky-100 bg-sky-50/40 p-3">
                   <div className="space-y-2">
-                    {selectedMembers.map((member) => (
-                      <div key={member.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
-                        <Avatar user={member} size="xs" />
-                        <span className="text-sm font-semibold text-gray-700 flex-1 min-w-0 truncate">
-                          {member.id === currentUserId ? 'You' : member.display_name}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {splitType === 'exact' && <span className="text-xs text-gray-400">{currency}</span>}
+                    {sharedItems.map((item, index) => (
+                      <div key={item.id} className="rounded-2xl bg-white border border-sky-100 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            inputMode="decimal"
-                            value={splitValues[member.id] || ''}
-                            onChange={(event) => handleSplitValueChange(member.id, event.target.value)}
-                            placeholder={splitType === 'exact' ? '0.00' : '0'}
-                            className="w-20 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm font-semibold text-right text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                            value={item.name}
+                            onChange={(event) => handleSharedItemChange(item.id, 'name', event.target.value)}
+                            placeholder={`Item ${index + 1} (e.g. Fries)`}
+                            className="flex-1 min-w-0 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-300"
                           />
-                          {splitType === 'percent' && <span className="text-xs text-gray-400">%</span>}
+                          <div className="flex items-center gap-1 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-xl">
+                            <span className="text-[10px] text-gray-500 font-semibold">{currency}</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={item.amount}
+                              onChange={(event) => handleSharedItemChange(item.id, 'amount', event.target.value)}
+                              placeholder="0.00"
+                              className="w-16 bg-transparent text-right text-sm font-semibold text-gray-800 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeSharedItemRow(item.id)}
+                            className="w-8 h-8 rounded-full border border-gray-200 text-gray-500 text-sm"
+                            aria-label={`Remove item ${index + 1}`}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {sharedItemMemberChoices.map((member) => {
+                            const selected = (item.memberIds || []).includes(member.id)
+                            return (
+                              <button
+                                key={`${item.id}-${member.id}`}
+                                type="button"
+                                onClick={() => toggleSharedItemMember(item.id, member.id)}
+                                className={`px-2.5 py-1.5 rounded-full text-xs font-semibold border transition ${
+                                  selected ? 'border-sky-400 bg-sky-50 text-sky-700' : 'border-gray-200 bg-white text-gray-600'
+                                }`}
+                              >
+                                {member.id === currentUserId ? 'You' : member.display_name.split(' ')[0]}
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
                     ))}
                   </div>
+
+                  <div className="rounded-2xl border border-sky-100 bg-white p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
+                      <span>Shared items total</span>
+                      <span>{formatMoney(itemizedPreview.total, currency)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
+                      <span>Exact + shared total</span>
+                      <span>{formatMoney(combinedExactSum, currency)}</span>
+                    </div>
+                    {Object.keys(combinedExactValues)
+                      .filter((memberId) => Number(combinedExactValues[memberId] || 0) > 0)
+                      .map((memberId) => {
+                        const member = members.find((entry) => entry.id === memberId)
+                        if (!member) return null
+                        return (
+                          <div key={`combined-preview-${memberId}`} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700">{member.id === currentUserId ? 'You' : member.display_name}</span>
+                            <span className="font-semibold text-sky-700">{formatMoney(Number(combinedExactValues[memberId] || 0), currency)}</span>
+                          </div>
+                        )
+                      })}
+                  </div>
                 </div>
               )}
-            </>
-          )}
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Split between</p>
+              <div className="flex gap-2 flex-wrap">
+                {members.map((member) => {
+                  const included = splitMembers.includes(member.id)
+                  return (
+                    <button
+                      key={member.id}
+                      onClick={() => toggleMember(member.id)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-2xl border-2 transition-all ${
+                        included ? 'border-sky-500 bg-sky-50' : 'border-gray-200 bg-white opacity-50'
+                      }`}
+                    >
+                      <Avatar user={member} size="xs" />
+                      <span className={`text-sm font-semibold ${included ? 'text-sky-700' : 'text-gray-500'}`}>
+                        {member.id === currentUserId ? 'You' : member.display_name}
+                      </span>
+                      {included && <span className="text-sky-500 text-xs">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {splitType !== 'equal' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                    {splitType === 'exact' ? 'Exact amounts' : 'Percentages'}
+                  </p>
+                  <p className="text-xs font-semibold text-gray-400">
+                    {splitType === 'exact'
+                      ? `${formatMoney(combinedExactSum, currency)} / ${formatMoney(numericAmount || 0, currency)}`
+                      : `${percentSum.toFixed(2)}% / 100%`}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {selectedMembers.map((member) => (
+                    <div key={member.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
+                      <Avatar user={member} size="xs" />
+                      <span className="text-sm font-semibold text-gray-700 flex-1 min-w-0 truncate">
+                        {member.id === currentUserId ? 'You' : member.display_name}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {splitType === 'exact' && <span className="text-xs text-gray-400">{currency}</span>}
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={splitValues[member.id] || ''}
+                          onChange={(event) => handleSplitValueChange(member.id, event.target.value)}
+                          placeholder={splitType === 'exact' ? '0.00' : '0'}
+                          className="w-20 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm font-semibold text-right text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                        />
+                        {splitType === 'percent' && <span className="text-xs text-gray-400">%</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
 
           {splitValidationMessage && (
