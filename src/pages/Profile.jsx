@@ -28,6 +28,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [removingAvatar, setRemovingAvatar] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -119,11 +120,14 @@ export default function Profile() {
   }
 
   const handleSignOut = async () => {
+    setSigningOut(true)
     try {
       await signOut()
       navigate('/login')
     } catch (error) {
       showToast(error.message || 'Unable to sign out', 'error')
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -254,16 +258,21 @@ export default function Profile() {
           {saving ? 'Saving...' : 'Save changes'}
         </button>
 
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-          <button onClick={handleSignOut} className="w-full px-4 py-4 flex items-center gap-3 text-left">
-            <div className="w-8 h-8 bg-red-50 rounded-xl flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-              </svg>
-            </div>
-            <span className="text-red-500 font-semibold text-sm">Sign out</span>
-          </button>
-        </div>
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+            <button
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="w-full px-4 py-4 flex items-center gap-3 text-left disabled:opacity-60"
+            >
+              <div className="w-8 h-8 bg-red-50 rounded-xl flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                </svg>
+              </div>
+              <span className="text-red-500 font-semibold text-sm">{signingOut ? 'Signing out...' : 'Sign out'}</span>
+            </button>
+          </div>
+
 
         <p className="text-center text-xs text-gray-300 pb-2">Kaki Split v1.0</p>
       </div>
