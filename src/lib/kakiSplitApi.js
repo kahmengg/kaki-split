@@ -1751,7 +1751,19 @@ export async function fetchInsightsData(groupId) {
   const byCategoryMap = new Map()
 
   for (const expense of expenses) {
-    byPersonMap.set(expense.paid_by, round2((byPersonMap.get(expense.paid_by) || 0) + Number(expense.amount || 0)))
+    const splits = Array.isArray(expense.splits) ? expense.splits : []
+
+    if (splits.length > 0) {
+      for (const split of splits) {
+        const userId = split?.user_id
+        if (!userId) continue
+        byPersonMap.set(userId, round2((byPersonMap.get(userId) || 0) + Number(split.amount || 0)))
+      }
+    } else {
+      // Fallback for legacy expenses without split rows.
+      byPersonMap.set(expense.paid_by, round2((byPersonMap.get(expense.paid_by) || 0) + Number(expense.amount || 0)))
+    }
+
     byCategoryMap.set(
       expense.category || 'other',
       round2((byCategoryMap.get(expense.category || 'other') || 0) + Number(expense.amount || 0))

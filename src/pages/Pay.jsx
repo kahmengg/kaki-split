@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
@@ -6,6 +7,7 @@ import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { fetchGroupData, recordPayment } from '../lib/kakiSplitApi'
 import { formatMoney } from '../lib/format'
+import { buildPayNowPayload, buildPayLahDeepLink, normalizePayNowProxy } from '../lib/paynow'
 
 function InlineToast({ message, visible }) {
   return (
@@ -24,49 +26,27 @@ function InlineToast({ message, visible }) {
   )
 }
 
-function PayNowQR({ phone }) {
-  const cells = useMemo(() => {
-    const seed = String(phone || '')
-      .split('')
-      .reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+function PayNowQR({ phone, amount }) {
+  const payload = useMemo(
+    () => buildPayNowPayload({ proxy: phone, amount, editable: false }),
+    [phone, amount]
+  )
 
-    return Array.from({ length: 15 * 15 }, (_, i) => {
-      const row = Math.floor(i / 15)
-      const col = i % 15
-      if (row < 3 && col < 3) return true
-      if (row < 3 && col > 11) return true
-      if (row > 11 && col < 3) return true
-      return ((seed * (i + 1) * 2654435761) >>> 0) % 3 !== 0
-    })
-  }, [phone])
-
-  const size = 130
-  const cellSize = size / 15
+  if (!payload) return null
 
   return (
     <div className="flex flex-col items-center">
       <div className="bg-white p-4 rounded-2xl border-2 border-gray-200 shadow-sm">
-        <svg width={size} height={size} className="block">
-          {cells.map((filled, i) => {
-            if (!filled) return null
-            const row = Math.floor(i / 15)
-            const col = i % 15
-            return (
-              <rect
-                key={i}
-                x={col * cellSize}
-                y={row * cellSize}
-                width={cellSize - 0.6}
-                height={cellSize - 0.6}
-                fill="#111827"
-                rx={0.8}
-              />
-            )
-          })}
-        </svg>
+        <QRCodeSVG
+          value={payload}
+          size={130}
+          bgColor="#ffffff"
+          fgColor="#111827"
+          level="M"
+        />
       </div>
       <p className="text-xs text-gray-500 mt-2 text-center">Scan with any Singapore banking app</p>
-      <p className="text-xs text-gray-400 mt-0.5 font-medium">{phone}</p>
+      <p className="text-xs text-gray-400 mt-0.5 font-medium">{normalizePayNowProxy(phone)}</p>
     </div>
   )
 }
@@ -126,11 +106,16 @@ export default function PayScreen() {
   const handlePayNowAndPayLah = () => {
     const payNowNumber = toUser?.paynow_number
     if (payNowNumber) {
-      navigator.clipboard?.writeText(payNowNumber).catch(() => {})
+      navigator.clipboard?.writeText(normalizePayNowProxy(payNowNumber) || payNowNumber).catch(() => {})
     }
     showInlineToast('PayNow number copied! Opening PayLah...')
     window.setTimeout(() => {
-      window.location.href = 'dbspaylah://'
+      const deepLink = buildPayLahDeepLink({
+        proxy: payNowNumber,
+        amount: payAmount,
+        name: toUser?.display_name,
+      })
+      window.location.href = deepLink
     }, 300)
   }
 
@@ -265,7 +250,7 @@ export default function PayScreen() {
             </div>
 
             <div className="flex justify-center mb-5">
-              <PayNowQR phone={toUser.paynow_number} />
+              <PayNowQR phone={toUser.paynow_number} amount={payAmount} />
             </div>
 
             <button
@@ -276,7 +261,7 @@ export default function PayScreen() {
               <span>📋</span>
               Copy PayNow &amp; Open PayLah!
             </button>
-            <p className="text-center text-xs text-gray-400 mt-2">Copies {toUser.paynow_number} · opens PayLah app</p>
+              <p className="text-center text-xs text-gray-400 mt-2">Copies {normalizePayNowProxy(toUser.paynow_number)} · opens PayLah with {formatMoney(payAmount)} pre-filled</p>
           </div>
         )}
 
