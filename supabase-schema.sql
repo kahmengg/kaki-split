@@ -97,8 +97,25 @@ create table if not exists public.telegram_connections (
   reminder_hour smallint not null default 0,
   reminder_minute smallint not null default 0,
   reminder_timezone text not null default 'Asia/Singapore',
+  reminder_interval_days smallint not null default 1 check (reminder_interval_days between 1 and 30),
   last_daily_reminder_date date
 );
+
+alter table public.telegram_connections
+add column if not exists reminder_interval_days smallint not null default 1;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'telegram_connections_reminder_interval_days_check'
+  ) then
+    alter table public.telegram_connections
+    add constraint telegram_connections_reminder_interval_days_check
+    check (reminder_interval_days between 1 and 30);
+  end if;
+end $$;
 
 create table if not exists public.telegram_link_tokens (
   id uuid primary key default gen_random_uuid(),

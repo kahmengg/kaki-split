@@ -66,6 +66,237 @@ function shouldDisableConnection(sendResult) {
   )
 }
 
+function isMissingColumnError(error) {
+  return ['42703', 'PGRST204'].includes(String(error?.code || ''))
+}
+
+function parseBooleanSetting(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (['on', 'true', 'yes', 'enable', 'enabled', '1'].includes(normalized)) return true
+  if (['off', 'false', 'no', 'disable', 'disabled', '0'].includes(normalized)) return false
+  return null
+}
+
+function parseReminderTime(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  const match = normalized.match(/^(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?$/)
+  if (!match) return null
+
+  let hour = Number(match[1])
+  const minute = Number(match[2] || 0)
+  const meridiem = match[3]
+
+  if (meridiem === 'pm' && hour < 12) hour += 12
+  if (meridiem === 'am' && hour === 12) hour = 0
+
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+
+  return { hour, minute }
+}
+
+function parseReminderInterval(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return null
+  if (['daily', 'day', '1', '1d', '1day'].includes(normalized)) return 1
+
+  const match = normalized.match(/^(\d{1,2})\s*(d|day|days)?$/)
+  if (!match) return null
+
+  const days = Number(match[1])
+  if (!Number.isInteger(days) || days < 1 || days > 30) return null
+  return days
+}
+
+function formatReminderTime(connection) {
+  const hour = Number(connection?.reminder_hour ?? 0)
+  const minute = Number(connection?.reminder_minute ?? 0)
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function formatTelegramSettings(connection) {
+  const interval = Number(connection?.reminder_interval_days || 1)
+  const intervalLabel = interval === 1 ? 'daily' : `every ${interval} days`
+  return [
+    'Kaki Split alert settings:',
+    `All alerts: ${connection?.is_active ? 'on' : 'off'}`,
+    `Expense alerts: ${connection?.expense_alerts_enabled ? 'on' : 'off'}`,
+    `Payment alerts: ${connection?.payment_alerts_enabled ? 'on' : 'off'}`,
+    `Reminders: ${connection?.daily_reminder_enabled ? 'on' : 'off'}`,
+    `Reminder time: ${formatReminderTime(connection)} ${connection?.reminder_timezone || 'Asia/Singapore'}`,
+    `Reminder frequency: ${intervalLabel}`,
+    '',
+    'Commands:',
+    '/alerts on',
+    '/alerts off',
+    '/alerts expense on',
+    '/alerts payment off',
+    '/alerts reminders on',
+    '/alerts time 09:30',
+    '/alerts every 2 days',
+    '/alerts status',
+  ].join('\n')
+}
+
+async function findConnectionForChat(chatId) {
+  const { data, error } = await adminSupabase
+    .from('telegram_connections')
+    .select(
+      'group_id,telegram_chat_id,telegram_group_name,is_active,expense_alerts_enabled,payment_alerts_enabled,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone,reminder_interval_days'
+    )
+    .eq('telegram_chat_id', chatId)
+    .maybeSingle()
+
+  if (error) {
+    if (isMissingColumnError(error)) {
+      const fallback = await adminSupabase
+        .from('telegram_connections')
+        .select(
+          'group_id,telegram_chat_id,telegram_group_name,is_active,expense_alerts_enabled,payment_alerts_enabled,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone'
+        )
+        .eq('telegram_chat_id', chatId)
+        .maybeSingle()
+
+      if (fallback.error) throw fallback.error
+      return fallback.data ? { ...fallback.data, reminder_interval_days: 1 } : null
+    }
+    throw error
+  }
+
+  return data ? { ...data, reminder_interval_days: data.reminder_interval_days || 1 } : null
+}
+
+async function updateConnectionSettings({ chatId, update }) {
+  let response = await adminSupabase
+    .from('telegram_connections')
+    .update(update)
+    .eq('telegram_chat_id', chatId)
+    .select(
+      'group_id,telegram_chat_id,telegram_group_name,is_active,expense_alerts_enabled,payment_alerts_enabled,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone,reminder_interval_days'
+    )
+    .maybeSingle()
+
+  if (isMissingColumnError(response.error) && Object.prototype.hasOwnProperty.call(update, 'reminder_interval_days')) {
+    const legacyUpdate = { ...update }
+    delete legacyUpdate.reminder_interval_days
+    response = await adminSupabase
+      .from('telegram_connections')
+      .update(legacyUpdate)
+      .eq('telegram_chat_id', chatId)
+      .select(
+        'group_id,telegram_chat_id,telegram_group_name,is_active,expense_alerts_enabled,payment_alerts_enabled,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone'
+      )
+      .maybeSingle()
+  }
+
+  if (response.error) throw response.error
+  return response.data ? { ...response.data, reminder_interval_days: response.data.reminder_interval_days || update.reminder_interval_days || 1 } : null
+}
+
+async function handleAlertsCommand({ botToken, chat, text }) {
+  const commandMatch = text.match(/^\/(?:alerts|notifications?)(?:@\w+)?(?:\s+([\s\S]+))?$/i)
+  if (!commandMatch) return null
+
+  const connection = await findConnectionForChat(chat.id)
+  if (!connection) {
+    await sendTelegramMessage({
+      botToken,
+      chatId: chat.id,
+      text: 'This Telegram group is not linked yet. Generate a link code in Kaki Split, then send /link <code> here.',
+    })
+    return { ok: false, error: 'Chat is not linked' }
+  }
+
+  const args = String(commandMatch[1] || 'status').trim()
+  const parts = args.split(/\s+/).filter(Boolean)
+  const primary = String(parts[0] || 'status').toLowerCase()
+  const secondary = String(parts[1] || '').toLowerCase()
+  let update = null
+  let successMessage = ''
+
+  if (primary === 'help' || primary === 'status') {
+    await sendTelegramMessage({ botToken, chatId: chat.id, text: formatTelegramSettings(connection) })
+    return { ok: true, action: 'alerts_status' }
+  }
+
+  const allValue = parseBooleanSetting(primary)
+  if (allValue !== null) {
+    update = {
+      is_active: allValue,
+      expense_alerts_enabled: allValue,
+      payment_alerts_enabled: allValue,
+      daily_reminder_enabled: allValue,
+    }
+    successMessage = `All Kaki Split alerts are now ${allValue ? 'on' : 'off'}.`
+  } else if (['expense', 'expenses'].includes(primary)) {
+    const enabled = parseBooleanSetting(secondary)
+    if (enabled !== null) {
+      update = { expense_alerts_enabled: enabled, is_active: true }
+      successMessage = `Expense alerts are now ${enabled ? 'on' : 'off'}.`
+    }
+  } else if (['payment', 'payments'].includes(primary)) {
+    const enabled = parseBooleanSetting(secondary)
+    if (enabled !== null) {
+      update = { payment_alerts_enabled: enabled, is_active: true }
+      successMessage = `Payment alerts are now ${enabled ? 'on' : 'off'}.`
+    }
+  } else if (['reminder', 'reminders', 'daily'].includes(primary)) {
+    const enabled = parseBooleanSetting(secondary)
+    if (enabled !== null) {
+      update = { daily_reminder_enabled: enabled, is_active: true }
+      successMessage = `Balance reminders are now ${enabled ? 'on' : 'off'}.`
+    }
+  } else if (['time', 'at'].includes(primary)) {
+    const time = parseReminderTime(parts.slice(1).join(' '))
+    if (time) {
+      update = { reminder_hour: time.hour, reminder_minute: time.minute, daily_reminder_enabled: true, is_active: true }
+      successMessage = `Balance reminders will run at ${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}.`
+    }
+  } else if (['every', 'interval', 'frequency', 'duration'].includes(primary)) {
+    const interval = parseReminderInterval(parts.slice(1).join(' '))
+    if (interval) {
+      update = { reminder_interval_days: interval, daily_reminder_enabled: true, is_active: true }
+      successMessage = interval === 1 ? 'Balance reminders will run daily.' : `Balance reminders will run every ${interval} days.`
+    }
+  } else if (['tz', 'timezone'].includes(primary)) {
+    const timezone = parts.slice(1).join(' ')
+    if (timezone) {
+      update = { reminder_timezone: timezone, daily_reminder_enabled: true, is_active: true }
+      successMessage = `Reminder timezone set to ${timezone}.`
+    }
+  }
+
+  if (!update) {
+    await sendTelegramMessage({
+      botToken,
+      chatId: chat.id,
+      text: [
+        'I did not understand that alert command.',
+        '',
+        'Try:',
+        '/alerts on',
+        '/alerts off',
+        '/alerts expense on',
+        '/alerts payment off',
+        '/alerts reminders on',
+        '/alerts time 09:30',
+        '/alerts every 2 days',
+        '/alerts status',
+      ].join('\n'),
+    })
+    return { ok: false, error: 'Invalid alerts command' }
+  }
+
+  const updated = await updateConnectionSettings({ chatId: chat.id, update })
+  await sendTelegramMessage({
+    botToken,
+    chatId: chat.id,
+    text: `${successMessage}\n\n${formatTelegramSettings(updated)}`,
+  })
+
+  return { ok: true, action: 'alerts_update' }
+}
+
 async function markOutboxRows(ids, update) {
   if (!Array.isArray(ids) || ids.length === 0) return
 
@@ -129,6 +360,9 @@ export async function handleTelegramWebhook({ botToken, update }) {
   }
 
   const text = String(message.text || '').trim()
+  const alertsResult = await handleAlertsCommand({ botToken, chat, text })
+  if (alertsResult) return alertsResult
+
   const match = text.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9_-]+)$/i)
   if (!match) return { ok: true, ignored: true }
 
@@ -153,22 +387,30 @@ export async function handleTelegramWebhook({ botToken, update }) {
     return { ok: false, error: 'Invalid or expired token' }
   }
 
-  const { error: connectionError } = await adminSupabase.from('telegram_connections').upsert(
-    {
-      group_id: linkToken.group_id,
-      telegram_chat_id: chat.id,
-      telegram_group_name: chat.title || 'Telegram group',
-      linked_by: linkToken.created_by,
-      is_active: true,
-      expense_alerts_enabled: true,
-      payment_alerts_enabled: true,
-      daily_reminder_enabled: true,
-      reminder_hour: 0,
-      reminder_minute: 0,
-      reminder_timezone: 'Asia/Singapore',
-    },
-    { onConflict: 'group_id' }
-  )
+  const connectionPayload = {
+    group_id: linkToken.group_id,
+    telegram_chat_id: chat.id,
+    telegram_group_name: chat.title || 'Telegram group',
+    linked_by: linkToken.created_by,
+    is_active: true,
+    expense_alerts_enabled: true,
+    payment_alerts_enabled: true,
+    daily_reminder_enabled: true,
+    reminder_hour: 0,
+    reminder_minute: 0,
+    reminder_timezone: 'Asia/Singapore',
+    reminder_interval_days: 1,
+  }
+
+  let connectionResponse = await adminSupabase.from('telegram_connections').upsert(connectionPayload, { onConflict: 'group_id' })
+
+  if (isMissingColumnError(connectionResponse.error)) {
+    const legacyPayload = { ...connectionPayload }
+    delete legacyPayload.reminder_interval_days
+    connectionResponse = await adminSupabase.from('telegram_connections').upsert(legacyPayload, { onConflict: 'group_id' })
+  }
+
+  const { error: connectionError } = connectionResponse
 
   if (connectionError) throw connectionError
 
@@ -186,11 +428,20 @@ export async function handleTelegramWebhook({ botToken, update }) {
 
   if (groupUpdateError) throw groupUpdateError
 
-    await sendTelegramMessage({
-      botToken,
-      chatId: chat.id,
-      text: '✅ KakiSplit connected. We send a daily unsettled-balance reminder once per day.',
-    })
+  await sendTelegramMessage({
+    botToken,
+    chatId: chat.id,
+    text: [
+      'Kaki Split connected. We send unsettled-balance reminders once per day by default.',
+      '',
+      'Manage alerts here with:',
+      '/alerts on',
+      '/alerts off',
+      '/alerts time 09:30',
+      '/alerts every 2 days',
+      '/alerts status',
+    ].join('\n'),
+  })
 
   return { ok: true, linkedGroupId: linkToken.group_id }
 }
@@ -218,7 +469,6 @@ export async function processTelegramOutbox({ botToken }) {
     .from('telegram_outbox')
     .select('id,group_id,event_type,payload,attempts,created_at')
     .eq('status', 'pending')
-    .eq('event_type', 'daily_reminder')
     .lte('available_at', new Date().toISOString())
     .order('created_at', { ascending: true })
     .limit(50)
@@ -237,6 +487,27 @@ export async function processTelegramOutbox({ botToken }) {
   const connectionByGroup = new Map((connections || []).map((conn) => [conn.group_id, conn]))
   const rowsByGroup = new Map()
 
+  function messageForEvent(row) {
+    const payload = row.payload || {}
+
+    if (row.event_type === 'daily_reminder') {
+      return payload.message || 'Daily reminder: unsettled balances remain.'
+    }
+
+    if (row.event_type === 'expense_added') {
+      const description = String(payload.description || 'Expense added').trim()
+      const amount = round2(payload.amount || 0).toFixed(2)
+      return `${description}\nAmount: ${amount}`
+    }
+
+    if (row.event_type === 'payment_recorded') {
+      const amount = round2(payload.amount || 0).toFixed(2)
+      return `Payment recorded\nAmount: ${amount}`
+    }
+
+    return null
+  }
+
   for (const row of rows) {
     if (!rowsByGroup.has(row.group_id)) {
       rowsByGroup.set(row.group_id, [])
@@ -249,43 +520,47 @@ export async function processTelegramOutbox({ botToken }) {
 
   for (const [groupId, groupRows] of rowsByGroup.entries()) {
     const connection = connectionByGroup.get(groupId)
+    const sendableRows = []
+    const skippedRows = []
 
-      const skippedRows = []
-      const reminderRows = []
+    for (const row of groupRows) {
+      const disabledBySetting =
+        !connection?.is_active ||
+        (row.event_type === 'expense_added' && !connection?.expense_alerts_enabled) ||
+        (row.event_type === 'payment_recorded' && !connection?.payment_alerts_enabled) ||
+        (row.event_type === 'daily_reminder' && !connection?.daily_reminder_enabled)
 
-      for (const row of groupRows) {
-        const skipBySetting = !connection?.is_active || (row.event_type === 'daily_reminder' && !connection?.daily_reminder_enabled)
-
-        if (skipBySetting) {
-          skippedRows.push(row)
-          continue
-        }
-
-        if (row.event_type === 'daily_reminder') {
-          reminderRows.push(row)
-        } else {
-          skippedRows.push(row)
-        }
+      if (disabledBySetting) {
+        skippedRows.push(row)
+      } else {
+        sendableRows.push(row)
       }
+    }
 
-      if (skippedRows.length > 0) {
-        await markOutboxRows(
-          skippedRows.map((row) => row.id),
-          { status: 'sent', sent_at: new Date().toISOString(), error_message: null }
-        )
+    if (skippedRows.length > 0) {
+      await markOutboxRows(
+        skippedRows.map((row) => row.id),
+        { status: 'sent', sent_at: new Date().toISOString(), error_message: null }
+      )
+    }
+
+    if (!connection?.telegram_chat_id) {
+      if (sendableRows.length > 0) {
+        await markBatchFailed(sendableRows, 'Missing Telegram chat', { retry: false })
+        failed += sendableRows.length
       }
+      continue
+    }
 
-      if (!connection?.telegram_chat_id) {
-        if (reminderRows.length > 0) {
-          await markBatchFailed(reminderRows, 'Missing chat or unsupported event', { retry: false })
-          failed += reminderRows.length
-        }
+    for (const row of sendableRows) {
+      const message = messageForEvent(row)
+
+      if (!message) {
+        await markBatchFailed([row], 'Unsupported event type', { retry: false })
+        failed += 1
         continue
       }
 
-      for (const row of reminderRows) {
-
-      const message = row.payload?.message || '⏰ Daily reminder: unsettled balances remain.'
       const sendResult = await sendTelegramMessage({
         botToken,
         chatId: connection.telegram_chat_id,
@@ -298,14 +573,14 @@ export async function processTelegramOutbox({ botToken }) {
           .update({ status: 'sent', sent_at: new Date().toISOString(), error_message: null })
           .eq('id', row.id)
         sent += 1
-        } else {
-          if (shouldDisableConnection(sendResult)) {
-            await deactivateConnectionsForChat(connection.telegram_chat_id)
-          }
+      } else {
+        if (shouldDisableConnection(sendResult)) {
+          await deactivateConnectionsForChat(connection.telegram_chat_id)
+        }
 
-          const attempts = Number(row.attempts || 0) + 1
-
+        const attempts = Number(row.attempts || 0) + 1
         const shouldFail = attempts >= 5
+
         await adminSupabase
           .from('telegram_outbox')
           .update({
@@ -434,12 +709,21 @@ function formatPairExpenseContext(contextByPair, fromUserId, toUserId) {
 }
 
 export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
-  const { data: rows, error } = await adminSupabase
+  let rowsResponse = await adminSupabase
     .from('telegram_connections')
-    .select('group_id,is_active,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone,last_daily_reminder_date')
+    .select('group_id,is_active,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone,reminder_interval_days,last_daily_reminder_date')
     .eq('is_active', true)
     .eq('daily_reminder_enabled', true)
 
+  if (isMissingColumnError(rowsResponse.error)) {
+    rowsResponse = await adminSupabase
+      .from('telegram_connections')
+      .select('group_id,is_active,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone,last_daily_reminder_date')
+      .eq('is_active', true)
+      .eq('daily_reminder_enabled', true)
+  }
+
+  const { data: rows, error } = rowsResponse
   if (error) throw error
   if (!rows || rows.length === 0) return { scanned: 0, queued: 0 }
 
@@ -453,6 +737,13 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
 
       const dateKey = toDateInTimezone(now, timezone)
       if (row.last_daily_reminder_date === dateKey) continue
+
+      const intervalDays = Math.max(1, Math.min(30, Number(row.reminder_interval_days || 1)))
+      if (row.last_daily_reminder_date && intervalDays > 1) {
+        const elapsedMs = new Date(`${dateKey}T00:00:00Z`).getTime() - new Date(`${row.last_daily_reminder_date}T00:00:00Z`).getTime()
+        const elapsedDays = Math.floor(elapsedMs / (24 * 60 * 60 * 1000))
+        if (elapsedDays < intervalDays) continue
+      }
 
       const scheduledMinuteOfDay = hour * 60 + minute
       const nowMinuteOfDay = localNow.getHours() * 60 + localNow.getMinutes()
