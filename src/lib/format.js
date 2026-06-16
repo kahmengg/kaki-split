@@ -1,21 +1,21 @@
 export const CATEGORIES = [
-  { id: 'food', icon: '🍜', label: 'Food' },
-  { id: 'transport', icon: '🚗', label: 'Transport' },
-  { id: 'accommodation', icon: '🏠', label: 'Stay' },
-  { id: 'activities', icon: '🏄', label: 'Activities' },
-  { id: 'other', icon: '📦', label: 'Other' },
+  { id: 'food', icon: '\u{1F35C}', label: 'Food' },
+  { id: 'transport', icon: '\u{1F697}', label: 'Transport' },
+  { id: 'accommodation', icon: '\u{1F3E0}', label: 'Stay' },
+  { id: 'activities', icon: '\u{1F3C4}', label: 'Activities' },
+  { id: 'other', icon: '\u{1F4E6}', label: 'Other' },
 ]
 
 export const CURRENCIES = [
   { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
   { code: 'USD', symbol: '$', name: 'US Dollar' },
-  { code: 'EUR', symbol: '€', name: 'Euro' },
-  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'EUR', symbol: '\u20AC', name: 'Euro' },
+  { code: 'GBP', symbol: '\u00A3', name: 'British Pound' },
   { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
   { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah' },
-  { code: 'THB', symbol: '฿', name: 'Thai Baht' },
+  { code: 'THB', symbol: '\u0E3F', name: 'Thai Baht' },
   { code: 'MYR', symbol: 'RM', name: 'Malaysian Ringgit' },
-  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'JPY', symbol: '\u00A5', name: 'Japanese Yen' },
 ]
 
 export function formatMoney(amount, currency = 'SGD') {
@@ -23,7 +23,7 @@ export function formatMoney(amount, currency = 'SGD') {
 }
 
 export function timeAgo(dateStr) {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   const now = new Date()
   const date = new Date(dateStr)
   const diff = Math.floor((now - date) / 1000)
@@ -37,7 +37,7 @@ export function timeAgo(dateStr) {
 }
 
 export function getCategoryIcon(category) {
-  return CATEGORIES.find(c => c.id === category)?.icon || '📦'
+  return CATEGORIES.find((item) => item.id === category)?.icon || '\u{1F4E6}'
 }
 
 export function getUserInitials(user) {

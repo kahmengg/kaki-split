@@ -74,7 +74,7 @@ function PaymentRow({ payment, usersById, currentUserId, currency }) {
 
   return (
     <div className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0">
-      <div className="w-10 h-10 bg-sky-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl">ðŸ’¸</div>
+      <div className="w-10 h-10 bg-sky-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl">&#128184;</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -124,6 +124,7 @@ function SwipeDeleteRow({ children, canDelete, onDelete }) {
           onDelete()
         }}
         className="absolute inset-y-0 right-0 w-[86px] bg-red-500 text-white text-xs font-bold flex items-center justify-center"
+        style={{ transform: offset === 0 ? 'translateX(100%)' : 'translateX(0)' }}
       >
         Delete
       </button>
@@ -204,7 +205,7 @@ function ConnectTelegramSheet({
           <div className="space-y-4">
             <p className="text-sm text-gray-600 leading-relaxed">Get expense updates and debt reminders in your group chat.</p>
             <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4">
-              <p className="text-sky-800 font-semibold text-sm">âœ… Connected to {telegramGroupName}</p>
+              <p className="text-sky-800 font-semibold text-sm">&#10003; Connected to {telegramGroupName}</p>
               <p className="text-sky-700 text-xs mt-1">Notifications are active for {groupName}.</p>
             </div>
 
@@ -715,7 +716,7 @@ export default function GroupHome() {
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-black text-gray-900 truncate">{group.name}</h1>
                 <p className="text-gray-400 text-xs">
-                  {members.length} members Â· {formatMoney(group.total_spent, group.base_currency)} total
+                  {members.length} members · {formatMoney(group.total_spent, group.base_currency)} total
                 </p>
 
             </div>
@@ -768,12 +769,12 @@ export default function GroupHome() {
 
           <div className="relative bg-amber-50 border border-amber-200 rounded-2xl p-3.5 pr-10">
             <button onClick={() => setShowReminderBanner(false)} className="absolute top-2 right-2 text-amber-500 text-xs" aria-label="Dismiss reminder">
-              âœ•
+              &times;
             </button>
               <p className="text-amber-800 text-xs font-medium leading-relaxed">
-                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you â€” you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} Â·{' '}
+                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you - you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} ·{' '}
                 <button onClick={() => handlePay(debtReminder)} className="text-sky-600 font-bold">
-                  Pay now â†’
+                  Pay now &rarr;
                 </button>
               </p>
 
@@ -784,7 +785,7 @@ export default function GroupHome() {
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">Your balances</p>
           {allSettled ? (
             <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 text-center">
-              <p className="text-2xl mb-1">âœ…</p>
+              <p className="text-2xl mb-1">&#10003;</p>
               <p className="text-sky-700 font-bold text-sm">All settled up!</p>
               <p className="text-sky-500 text-xs mt-0.5">Everyone's even on this trip</p>
             </div>
