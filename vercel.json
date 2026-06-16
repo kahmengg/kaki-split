@@ -1,4 +1,7 @@
 {
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist",
   "crons": [
     {
       "path": "/api/telegram/daily",

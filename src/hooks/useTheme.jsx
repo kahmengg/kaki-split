@@ -24,10 +24,14 @@ export function ThemeProvider({ children }) {
 
     if (theme === 'dark') {
       root.classList.add('theme-dark')
+      root.classList.remove('theme-light')
       body.classList.add('theme-dark')
+      body.classList.remove('theme-light')
     } else {
       root.classList.remove('theme-dark')
+      root.classList.add('theme-light')
       body.classList.remove('theme-dark')
+      body.classList.add('theme-light')
     }
   }, [theme])
 

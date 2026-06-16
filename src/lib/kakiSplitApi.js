@@ -973,7 +973,7 @@ export async function deleteGroupActivityItem({ groupId, itemType, itemId }) {
   if (!itemId) throw new Error('Item is required')
 
   const normalizedType = String(itemType || '').trim().toLowerCase()
-  if (!['expense', 'payment', 'event'].includes(normalizedType)) {
+  if (!['expense', 'payment'].includes(normalizedType)) {
     throw new Error('Invalid activity item type')
   }
 
@@ -995,6 +995,26 @@ export async function deleteGroupActivityItem({ groupId, itemType, itemId }) {
 
   clearReadCaches({ groupId })
   return payload || { ok: true }
+}
+
+export async function fetchDeletedActivityLogs({ groupId }) {
+  if (!groupId) return []
+
+  const accessToken = await getSessionAccessToken('Please sign in again to view deleted logs')
+  const query = new URLSearchParams({ groupId })
+  const response = await fetch(`/api/groups/deleted-logs?${query.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to load deleted logs')
+  }
+
+  return payload?.logs || []
 }
 
 export async function createTelegramLinkToken({ groupId, createdBy }) {

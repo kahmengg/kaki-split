@@ -18,6 +18,14 @@
     transition: background-color 180ms ease, color 180ms ease;
   }
 
+  html.theme-light,
+  body.theme-light {
+    @apply bg-sky-50 text-slate-900;
+    background-image:
+      linear-gradient(180deg, #eff9ff 0%, #f8fcff 42%, #eef8ff 100%);
+    background-attachment: fixed;
+  }
+
   html.theme-dark,
   body.theme-dark {
     @apply bg-slate-900 text-slate-100;
@@ -103,6 +111,28 @@
 
   .theme-toggle:hover {
     @apply border-sky-300;
+  }
+
+  .theme-light .bg-gray-50 { background-color: rgba(240, 249, 255, 0.75); }
+  .theme-light .bg-white { background-color: rgba(255, 255, 255, 0.95); }
+  .theme-light .bg-gray-100 { background-color: rgba(224, 242, 254, 0.7); }
+  .theme-light .bg-gray-200 { background-color: rgba(186, 230, 253, 0.6); }
+  .theme-light .border-gray-50 { border-color: #f0f9ff; }
+  .theme-light .border-gray-100 { border-color: rgba(224, 242, 254, 0.8); }
+  .theme-light .border-gray-200 { border-color: rgba(186, 230, 253, 0.8); }
+  .theme-light .shadow-sm {
+    box-shadow: 0 10px 24px rgba(14, 116, 144, 0.07) !important;
+  }
+
+  .theme-light .app-bottom-nav,
+  .theme-light .app-bottom-sheet {
+    @apply bg-white/95 border-sky-100 backdrop-blur;
+  }
+
+  .theme-light input,
+  .theme-light textarea,
+  .theme-light select {
+    @apply bg-white/90 border-sky-100;
   }
 
   .theme-dark .theme-toggle {

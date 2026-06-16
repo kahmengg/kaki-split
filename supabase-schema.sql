@@ -84,6 +84,17 @@ create table if not exists public.activity_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.deleted_activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups(id) on delete cascade,
+  deleted_by uuid references public.profiles(id) on delete set null,
+  item_type text not null check (item_type in ('expense', 'payment')),
+  item_id uuid not null,
+  item_snapshot jsonb not null default '{}'::jsonb,
+  deleted_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '1 month')
+);
+
 create table if not exists public.telegram_connections (
   group_id uuid primary key references public.groups(id) on delete cascade,
   telegram_chat_id bigint not null unique,
@@ -150,6 +161,8 @@ create index if not exists idx_expense_splits_expense_id on public.expense_split
 create index if not exists idx_payments_group_id on public.payments(group_id);
 create index if not exists idx_nudges_group_to on public.nudges(group_id, to_user_id);
 create index if not exists idx_activity_events_group_created on public.activity_events(group_id, created_at desc);
+create index if not exists idx_deleted_activity_logs_group_deleted on public.deleted_activity_logs(group_id, deleted_at desc);
+create index if not exists idx_deleted_activity_logs_expires on public.deleted_activity_logs(expires_at);
 create index if not exists idx_telegram_link_tokens_group on public.telegram_link_tokens(group_id);
 create index if not exists idx_telegram_link_tokens_token on public.telegram_link_tokens(token);
 create index if not exists idx_telegram_outbox_status_available on public.telegram_outbox(status, available_at);
@@ -205,6 +218,7 @@ alter table public.expense_splits enable row level security;
 alter table public.payments enable row level security;
 alter table public.nudges enable row level security;
 alter table public.activity_events enable row level security;
+alter table public.deleted_activity_logs enable row level security;
 alter table public.telegram_connections enable row level security;
 alter table public.telegram_link_tokens enable row level security;
 alter table public.telegram_outbox enable row level security;
@@ -510,6 +524,12 @@ using (
   actor_user_id = auth.uid()
   or public.is_group_owner(group_id, auth.uid())
 );
+
+drop policy if exists "deleted_activity_logs_select_group_member" on public.deleted_activity_logs;
+create policy "deleted_activity_logs_select_group_member"
+on public.deleted_activity_logs for select
+to authenticated
+using (public.is_group_member(group_id, auth.uid()));
 
 drop policy if exists "telegram_connections_select_group_member" on public.telegram_connections;
 create policy "telegram_connections_select_group_member"

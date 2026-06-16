@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+﻿import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
@@ -10,11 +10,10 @@ import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
 import {
   addExpense,
-  clearGroupActivity,
   createTelegramLinkToken,
-  deleteGroup,
   deleteGroupActivityItem,
   disconnectTelegramConnection,
+  fetchDeletedActivityLogs,
   fetchGroupData,
   fetchTelegramLinkToken,
   updateGroupName,
@@ -62,6 +61,81 @@ function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency, forc
           <p className="text-[11px] text-gray-500 mt-1 truncate">{personalSummary}</p>
 
 
+      </div>
+    </div>
+  )
+}
+
+function PaymentRow({ payment, usersById, currentUserId, currency }) {
+  const fromUser = usersById[payment.from_user_id]
+  const toUser = usersById[payment.to_user_id]
+  const fromLabel = payment.from_user_id === currentUserId ? 'You' : fromUser?.display_name || 'Member'
+  const toLabel = payment.to_user_id === currentUserId ? 'you' : toUser?.display_name || 'Member'
+
+  return (
+    <div className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0">
+      <div className="w-10 h-10 bg-sky-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl">ðŸ’¸</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 text-sm truncate">Payment recorded</p>
+            <p className="text-gray-500 text-xs mt-0.5 truncate">{fromLabel} paid {toLabel}</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="font-bold text-gray-900 text-sm">{formatMoney(payment.amount, currency || 'SGD')}</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-gray-500 mt-1 truncate">{timeAgo(payment.created_at)}</p>
+      </div>
+    </div>
+  )
+}
+
+function SwipeDeleteRow({ children, canDelete, onDelete }) {
+  const [offset, setOffset] = useState(0)
+  const startXRef = useRef(null)
+  const maxOffset = -86
+
+  const handlePointerDown = (event) => {
+    if (!canDelete) return
+    startXRef.current = event.clientX
+  }
+
+  const handlePointerMove = (event) => {
+    if (!canDelete || startXRef.current === null) return
+    const delta = event.clientX - startXRef.current
+    setOffset(Math.max(maxOffset, Math.min(0, delta)))
+  }
+
+  const handlePointerUp = () => {
+    if (!canDelete || startXRef.current === null) return
+    setOffset((current) => (current < -42 ? maxOffset : 0))
+    startXRef.current = null
+  }
+
+  if (!canDelete) return children
+
+  return (
+    <div className="relative overflow-hidden border-b border-gray-50 last:border-0">
+      <button
+        type="button"
+        onClick={() => {
+          setOffset(0)
+          onDelete()
+        }}
+        className="absolute inset-y-0 right-0 w-[86px] bg-red-500 text-white text-xs font-bold flex items-center justify-center"
+      >
+        Delete
+      </button>
+      <div
+        className="relative bg-white touch-pan-y transition-transform"
+        style={{ transform: `translateX(${offset}px)` }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        {children}
       </div>
     </div>
   )
@@ -130,7 +204,7 @@ function ConnectTelegramSheet({
           <div className="space-y-4">
             <p className="text-sm text-gray-600 leading-relaxed">Get expense updates and debt reminders in your group chat.</p>
             <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4">
-              <p className="text-sky-800 font-semibold text-sm">✅ Connected to {telegramGroupName}</p>
+              <p className="text-sky-800 font-semibold text-sm">âœ… Connected to {telegramGroupName}</p>
               <p className="text-sky-700 text-xs mt-1">Notifications are active for {groupName}.</p>
             </div>
 
@@ -256,7 +330,6 @@ export default function GroupHome() {
   const [usersById, setUsersById] = useState({})
   const [expenses, setExpenses] = useState([])
   const [payments, setPayments] = useState([])
-  const [activityEvents, setActivityEvents] = useState([])
   const [balances, setBalances] = useState([])
 
   const [showQuickSplit, setShowQuickSplit] = useState(false)
@@ -264,14 +337,12 @@ export default function GroupHome() {
   const [showTelegramSheet, setShowTelegramSheet] = useState(false)
   const [showTelegramOnboarding, setShowTelegramOnboarding] = useState(false)
   const [showEditGroupNameSheet, setShowEditGroupNameSheet] = useState(false)
+  const [showDeletedLogsSheet, setShowDeletedLogsSheet] = useState(false)
+  const [deletedLogs, setDeletedLogs] = useState([])
+  const [loadingDeletedLogs, setLoadingDeletedLogs] = useState(false)
   const [showReminderBanner, setShowReminderBanner] = useState(true)
-  const [deletingGroup, setDeletingGroup] = useState(false)
-  const [clearingActivity, setClearingActivity] = useState(false)
-  const [showClearConfirmSheet, setShowClearConfirmSheet] = useState(false)
-  const [clearConfirmText, setClearConfirmText] = useState('')
-  const [selectedDeleteType, setSelectedDeleteType] = useState('expense')
-  const [selectedDeleteId, setSelectedDeleteId] = useState('')
-  const [deletingSpecificItem, setDeletingSpecificItem] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deletingActivityItem, setDeletingActivityItem] = useState(false)
   const [groupNameDraft, setGroupNameDraft] = useState('')
   const [savingGroupName, setSavingGroupName] = useState(false)
   const addExpenseInFlightRef = useRef(false)
@@ -309,7 +380,6 @@ export default function GroupHome() {
             setUsersById(data.usersById)
             setExpenses(data.expenses)
             setPayments(data.payments || [])
-            setActivityEvents(data.activityEvents || [])
             setBalances(data.smartBalances)
             setTelegramConnected(Boolean(data.group.telegram_connected))
 
@@ -424,52 +494,24 @@ export default function GroupHome() {
   const debtReminder = balances.find((balance) => balance.from === user.id)
   const isOwner = group.created_by === user.id
 
-  const expenseDeleteOptions = expenses.slice(0, 25).map((expense) => {
-    const paidBy = usersById[expense.paid_by]
-      const settledCurrency = group.base_currency || 'SGD'
-      const originalCurrency = String(expense.original_currency || settledCurrency).trim().toUpperCase()
-      const originalAmount = Number(expense.original_amount || 0)
-      const settledAmount = Number(expense.amount || 0)
-      const hasConverted = Number.isFinite(originalAmount) && originalAmount > 0 && originalCurrency !== settledCurrency
-      const amountLabel = hasConverted
-        ? `${formatMoney(originalAmount, originalCurrency)} (${formatMoney(settledAmount, settledCurrency)})`
-        : formatMoney(settledAmount, settledCurrency)
-
-      return {
-        id: expense.id,
-        label: `${expense.description} · ${amountLabel}`,
-        meta: `${paidBy?.display_name || 'Unknown'} · ${timeAgo(expense.created_at)}`,
-      }
-
-  })
-
-  const paymentDeleteOptions = payments.slice(0, 25).map((payment) => {
-    const fromUser = usersById[payment.from_user_id]
-    const toUser = usersById[payment.to_user_id]
-    return {
+  const activityItems = [
+    ...expenses.map((expense) => ({
+      id: expense.id,
+      type: 'expense',
+      createdAt: expense.created_at,
+      label: expense.description || 'Expense',
+      amount: expense.amount,
+      item: expense,
+    })),
+    ...payments.map((payment) => ({
       id: payment.id,
-      label: `${fromUser?.display_name || 'Member'} → ${toUser?.display_name || 'Member'} · ${formatMoney(payment.amount, group.base_currency)}`,
-      meta: `${timeAgo(payment.created_at)}`,
-    }
-  })
-
-  const eventDeleteOptions = activityEvents.slice(0, 25).map((event) => {
-    const actor = usersById[event.actor_user_id]
-    return {
-      id: event.id,
-      label: `${event.event_type.replaceAll('_', ' ')} · ${actor?.display_name || 'Member'}`,
-      meta: `${timeAgo(event.created_at)}`,
-    }
-  })
-
-  const optionsByType = {
-    expense: expenseDeleteOptions,
-    payment: paymentDeleteOptions,
-    event: eventDeleteOptions,
-  }
-
-  const selectedTypeOptions = optionsByType[selectedDeleteType] || []
-
+      type: 'payment',
+      createdAt: payment.created_at,
+      label: 'Payment recorded',
+      amount: payment.amount,
+      item: payment,
+    })),
+  ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
   const handlePay = (balance) => {
     navigate(`/groups/${id}/pay?from=${balance.from}&to=${balance.to}&amount=${balance.amount}`)
   }
@@ -625,74 +667,39 @@ export default function GroupHome() {
     }
   }
 
-  const handleClearActivity = async () => {
-    if (!group || clearingActivity) return
+  const handleOpenDeletedLogs = async () => {
+    if (!group?.id) return
 
-    const normalized = clearConfirmText.trim().toUpperCase()
-    if (normalized !== 'CLEAR') {
-      showToast('Type CLEAR to confirm', 'error')
-      return
-    }
-
-    setClearingActivity(true)
+    setShowMenu(false)
+    setShowDeletedLogsSheet(true)
+    setLoadingDeletedLogs(true)
     try {
-      await clearGroupActivity({ groupId: group.id, confirmationText: normalized })
-      showToast('Group activity cleared', 'success')
-      setShowClearConfirmSheet(false)
-      setShowMenu(false)
-      setClearConfirmText('')
-      await invalidateGroup({ groupId: group.id, userId: user.id })
+      const logs = await fetchDeletedActivityLogs({ groupId: group.id })
+      setDeletedLogs(logs)
     } catch (error) {
-      showToast(error.message || 'Unable to clear activity', 'error')
+      showToast(error.message || 'Unable to load deleted logs', 'error')
     } finally {
-      setClearingActivity(false)
+      setLoadingDeletedLogs(false)
     }
   }
 
-  const handleDeleteSpecificItem = async () => {
-    if (!group || deletingSpecificItem) return
-    if (!selectedDeleteId) {
-      showToast('Choose an item to delete', 'error')
-      return
-    }
+  const handleConfirmDeleteActivityItem = async () => {
+    if (!group?.id || !deleteTarget || deletingActivityItem) return
 
-    setDeletingSpecificItem(true)
+    setDeletingActivityItem(true)
     try {
       await deleteGroupActivityItem({
         groupId: group.id,
-        itemType: selectedDeleteType,
-        itemId: selectedDeleteId,
+        itemType: deleteTarget.type,
+        itemId: deleteTarget.id,
       })
-      showToast('Activity item deleted', 'success')
-      setSelectedDeleteId('')
+      showToast(`${deleteTarget.type === 'payment' ? 'Payment' : 'Expense'} deleted`, 'success')
+      setDeleteTarget(null)
       await invalidateGroup({ groupId: group.id, userId: user.id })
     } catch (error) {
-      showToast(error.message || 'Unable to delete item', 'error')
+      showToast(error.message || 'Unable to delete activity item', 'error')
     } finally {
-      setDeletingSpecificItem(false)
-    }
-  }
-
-  const handleDeleteGroup = async () => {
-    if (!group || !isOwner || deletingGroup) return
-
-    const confirmed = window.confirm(`Delete "${group.name}" and all its expenses/payments? This cannot be undone.`)
-    if (!confirmed) return
-
-    setDeletingGroup(true)
-    try {
-      await deleteGroup({ groupId: group.id, userId: user.id })
-      if (localStorage.getItem('kakisplit:lastGroupId') === group.id) {
-        localStorage.removeItem('kakisplit:lastGroupId')
-      }
-      showToast('Group deleted', 'success')
-      await invalidateGroup({ groupId: group.id, userId: user.id })
-      navigate('/dashboard', { replace: true })
-    } catch (error) {
-      showToast(error.message || 'Unable to delete group', 'error')
-    } finally {
-      setDeletingGroup(false)
-      setShowMenu(false)
+      setDeletingActivityItem(false)
     }
   }
 
@@ -708,7 +715,7 @@ export default function GroupHome() {
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-black text-gray-900 truncate">{group.name}</h1>
                 <p className="text-gray-400 text-xs">
-                  {members.length} members · {formatMoney(group.total_spent, group.base_currency)} total
+                  {members.length} members Â· {formatMoney(group.total_spent, group.base_currency)} total
                 </p>
 
             </div>
@@ -761,12 +768,12 @@ export default function GroupHome() {
 
           <div className="relative bg-amber-50 border border-amber-200 rounded-2xl p-3.5 pr-10">
             <button onClick={() => setShowReminderBanner(false)} className="absolute top-2 right-2 text-amber-500 text-xs" aria-label="Dismiss reminder">
-              ✕
+              âœ•
             </button>
               <p className="text-amber-800 text-xs font-medium leading-relaxed">
-                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you — you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} ·{' '}
+                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you â€” you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} Â·{' '}
                 <button onClick={() => handlePay(debtReminder)} className="text-sky-600 font-bold">
-                  Pay now →
+                  Pay now â†’
                 </button>
               </p>
 
@@ -777,7 +784,7 @@ export default function GroupHome() {
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">Your balances</p>
           {allSettled ? (
             <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 text-center">
-              <p className="text-2xl mb-1">✅</p>
+              <p className="text-2xl mb-1">âœ…</p>
               <p className="text-sky-700 font-bold text-sm">All settled up!</p>
               <p className="text-sky-500 text-xs mt-0.5">Everyone's even on this trip</p>
             </div>
@@ -813,34 +820,42 @@ export default function GroupHome() {
                 >
                   {showAllInBaseCurrency ? `Showing ${group.base_currency}` : `Show all in ${group.base_currency}`}
                 </button>
-                <span className="text-xs text-gray-400">{expenses.length} expenses</span>
+                <span className="text-xs text-gray-400">{activityItems.length} items</span>
               </div>
             </div>
 
-
-          {expenses.length === 0 ? (
-            <div className="text-center py-10 px-4 bg-white rounded-2xl border border-gray-100">
-              <p className="text-4xl mb-3">🧾</p>
-              <p className="font-bold text-gray-900 mb-1">No expenses yet</p>
-              <p className="text-gray-500 text-sm">Tap + to add the first one</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 px-4">
-                  {expenses.map((expense) => (
-                    <ExpenseRow
-                      key={expense.id}
-                      expense={expense}
-                      usersById={usersById}
-                      currentUserId={user.id}
-                      groupBaseCurrency={group.base_currency}
-                      forceBaseCurrency={showAllInBaseCurrency}
-                    />
-                  ))}
-
-
-            </div>
-          )}
-        </div>
+            {activityItems.length === 0 ? (
+              <div className="text-center py-10 px-4 bg-white rounded-2xl border border-gray-100">
+                <p className="text-4xl mb-3">KS</p>
+                <p className="font-bold text-gray-900 mb-1">No activity yet</p>
+                <p className="text-gray-500 text-sm">Tap + to add the first one</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                {activityItems.map((activityItem) => (
+                  <SwipeDeleteRow
+                    key={`${activityItem.type}-${activityItem.id}`}
+                    canDelete={isOwner}
+                    onDelete={() => setDeleteTarget(activityItem)}
+                  >
+                    <div className="px-4">
+                      {activityItem.type === 'payment' ? (
+                        <PaymentRow payment={activityItem.item} usersById={usersById} currentUserId={user.id} currency={group.base_currency} />
+                      ) : (
+                        <ExpenseRow
+                          expense={activityItem.item}
+                          usersById={usersById}
+                          currentUserId={user.id}
+                          groupBaseCurrency={group.base_currency}
+                          forceBaseCurrency={showAllInBaseCurrency}
+                        />
+                      )}
+                    </div>
+                  </SwipeDeleteRow>
+                ))}
+              </div>
+            )}
+          </div>
       </div>
 
       <BottomNav onFABPress={() => setShowQuickSplit(true)} groupId={id} />
@@ -860,7 +875,7 @@ export default function GroupHome() {
             }}
             className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
           >
-            <span className="text-xl w-8 text-center">🔗</span>
+            <span className="text-xl w-8 text-center">&#128279;</span>
             <span className="font-semibold text-gray-800 text-sm">Share invite link</span>
           </button>
 
@@ -872,56 +887,30 @@ export default function GroupHome() {
             }}
             className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
           >
-            <span className="text-xl w-8 text-center">✏️</span>
+            <span className="text-xl w-8 text-center">&#9999;</span>
             <span className="font-semibold text-gray-800 text-sm">Edit group name</span>
           </button>
 
-
-
-              <button
-                onClick={() => {
-                  setShowMenu(false)
-                  setShowClearConfirmSheet(true)
-                  setClearConfirmText('')
-                }}
-                disabled={clearingActivity}
-                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-amber-50 text-left disabled:opacity-60"
-              >
-                <span className="text-xl w-8 text-center">🧹</span>
-                <span className="font-semibold text-amber-700 text-sm">{clearingActivity ? 'Clearing activity...' : 'Clear group activity'}</span>
-              </button>
-
-
-            <button
-              onClick={() => {
-                setShowMenu(false)
-                setShowTelegramSheet(true)
-              }}
-              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
-            >
-              <span className="text-xl w-8 text-center">💬</span>
-              <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✅ Telegram Connected' : 'Connect Telegram'}</span>
-            </button>
-
+          <button
+            onClick={handleOpenDeletedLogs}
+            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+          >
+            <span className="text-xl w-8 text-center">&#128220;</span>
+            <span className="font-semibold text-gray-800 text-sm">View deleted logs</span>
+          </button>
 
           <button
-            onClick={handleDeleteGroup}
-            disabled={!isOwner || deletingGroup}
-            className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left disabled:opacity-60 ${
-              isOwner ? 'hover:bg-red-50' : 'hover:bg-gray-50'
-            }`}
+            onClick={() => {
+              setShowMenu(false)
+              setShowTelegramSheet(true)
+            }}
+            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
           >
-            <span className="text-xl w-8 text-center">🗑️</span>
-            <div className="min-w-0">
-              <span className={`font-semibold text-sm ${isOwner ? 'text-red-600' : 'text-gray-500'}`}>
-                {isOwner ? (deletingGroup ? 'Deleting group...' : 'Delete group') : 'Delete group (owner only)'}
-              </span>
-              {!isOwner && <p className="text-xs text-gray-400 mt-0.5">Ask the group owner to delete this group.</p>}
-            </div>
+            <span className="text-xl w-8 text-center">&#128172;</span>
+            <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✓ Telegram Connected' : 'Connect Telegram'}</span>
           </button>
         </div>
       </BottomSheet>
-
         <BottomSheet isOpen={showEditGroupNameSheet} onClose={() => setShowEditGroupNameSheet(false)} title="Edit group name">
           <div className="px-5 py-4 pb-8 space-y-4">
             <div>
@@ -953,88 +942,69 @@ export default function GroupHome() {
           </div>
         </BottomSheet>
 
-        <BottomSheet isOpen={showClearConfirmSheet} onClose={() => setShowClearConfirmSheet(false)} title="Clear group activity">
+        <BottomSheet isOpen={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} title="Delete activity item">
           <div className="px-5 py-4 pb-8 space-y-4">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Danger zone</p>
-              <p className="text-sm text-amber-800">Type <span className="font-black">CLEAR</span> to wipe all expenses, payments, and activity events in this group.</p>
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+              <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">Confirm deletion</p>
+              <p className="text-sm text-red-700">
+                Delete {deleteTarget?.label || 'this item'}? This updates balances and keeps a deleted log for 1 month.
+              </p>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Confirmation text</label>
-              <input
-                type="text"
-                value={clearConfirmText}
-                onChange={(e) => setClearConfirmText(e.target.value)}
-                placeholder="Type CLEAR"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-transparent transition"
-              />
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Delete specific item instead</p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { key: 'expense', label: 'Expense' },
-                  { key: 'payment', label: 'Payment' },
-                  { key: 'event', label: 'Event' },
-                ].map((type) => (
-                  <button
-                    key={type.key}
-                    onClick={() => {
-                      setSelectedDeleteType(type.key)
-                      setSelectedDeleteId('')
-                    }}
-                    className={`py-2 rounded-xl border text-xs font-semibold transition ${
-                      selectedDeleteType === type.key
-                        ? 'border-sky-400 bg-sky-50 text-sky-700'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-
-              <select
-                value={selectedDeleteId}
-                onChange={(e) => setSelectedDeleteId(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
-              >
-                <option value="">Select a {selectedDeleteType} to delete</option>
-                {selectedTypeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label} ({option.meta})
-                  </option>
-                ))}
-              </select>
-
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleDeleteSpecificItem}
-                disabled={deletingSpecificItem || !selectedDeleteId}
-                className="w-full py-3 rounded-full border border-red-200 text-red-600 font-semibold text-sm disabled:opacity-60"
-              >
-                {deletingSpecificItem ? 'Deleting item...' : 'Delete selected item'}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={() => setShowClearConfirmSheet(false)}
+                onClick={() => setDeleteTarget(null)}
                 className="flex-1 py-3 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm"
               >
                 Cancel
               </button>
               <button
-                onClick={handleClearActivity}
-                disabled={clearingActivity || clearConfirmText.trim().toUpperCase() !== 'CLEAR'}
-                className="flex-1 py-3 rounded-full bg-amber-500 text-white font-bold text-sm disabled:opacity-60"
+                onClick={handleConfirmDeleteActivityItem}
+                disabled={deletingActivityItem}
+                className="flex-1 py-3 rounded-full bg-red-500 text-white font-bold text-sm disabled:opacity-60"
               >
-                {clearingActivity ? 'Clearing...' : 'Clear all'}
+                {deletingActivityItem ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
         </BottomSheet>
 
+        <BottomSheet isOpen={showDeletedLogsSheet} onClose={() => setShowDeletedLogsSheet(false)} title="Deleted logs">
+          <div className="px-5 py-4 pb-8 space-y-3">
+            {loadingDeletedLogs ? (
+              <div className="py-8 flex justify-center">
+                <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+              </div>
+            ) : deletedLogs.length === 0 ? (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-5 text-center">
+                <p className="font-bold text-gray-900 text-sm">No deleted logs</p>
+                <p className="text-xs text-gray-500 mt-1">Deleted expenses and payments appear here for 1 month.</p>
+              </div>
+            ) : (
+              deletedLogs.map((log) => {
+                const snapshot = log.item_snapshot || {}
+                const deletedBy = log.profiles?.display_name || log.profiles?.email || 'Member'
+                const title = log.item_type === 'payment' ? 'Payment recorded' : snapshot.description || 'Expense'
+                const amount = Number(snapshot.amount || 0)
+                const currency = snapshot.original_currency || group.base_currency || 'SGD'
+                const expiresLabel = log.expires_at ? new Date(log.expires_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }) : 'soon'
+
+                return (
+                  <div key={log.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold uppercase tracking-wide text-gray-400">{log.item_type}</p>
+                        <p className="font-bold text-gray-900 text-sm truncate mt-0.5">{title}</p>
+                        <p className="text-xs text-gray-500 mt-1">Deleted by {deletedBy} · {timeAgo(log.deleted_at)}</p>
+                      </div>
+                      <p className="font-bold text-gray-900 text-sm flex-shrink-0">{formatMoney(amount, currency)}</p>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-2">Expires {expiresLabel}</p>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </BottomSheet>
           <ConnectTelegramSheet
             isOpen={showTelegramSheet}
             onClose={() => setShowTelegramSheet(false)}
@@ -1075,3 +1045,12 @@ export default function GroupHome() {
 
   )
 }
+
+
+
+
+
+
+
+
+
