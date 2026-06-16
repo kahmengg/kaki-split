@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
+import { useInsightsData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
-import { fetchInsightsData } from '../lib/kakiSplitApi'
 import { CATEGORIES, formatMoney } from '../lib/format'
 
 function categoryMeta(categoryId) {
@@ -17,27 +17,16 @@ export default function TripSummary() {
   const cardRef = useRef(null)
   const showToast = useToast()
   const { user } = useAuth()
-
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState(null)
+  const insightsQuery = useInsightsData(id, user?.id)
 
   useEffect(() => {
-    if (!id || !user?.id) return
-
-    async function loadSummary() {
-      setLoading(true)
-      try {
-        const nextData = await fetchInsightsData(id)
-        setData(nextData)
-      } catch (error) {
-        showToast(error.message || 'Unable to load trip summary', 'error')
-      } finally {
-        setLoading(false)
-      }
+    if (insightsQuery.error) {
+      showToast(insightsQuery.error.message || 'Unable to load trip summary', 'error')
     }
+  }, [insightsQuery.error, showToast])
 
-    loadSummary()
-  }, [id, showToast, user?.id])
+  const data = insightsQuery.data
+  const loading = insightsQuery.isLoading
 
   const members = useMemo(() => data?.members || [], [data?.members])
 

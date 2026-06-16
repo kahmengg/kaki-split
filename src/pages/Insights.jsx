@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, PieChart, Pie } from 'recharts'
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
+import { useInsightsData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
-import { fetchInsightsData } from '../lib/kakiSplitApi'
 import { CATEGORIES, formatMoney } from '../lib/format'
 
 const CATEGORY_COLOR = {
@@ -41,27 +41,16 @@ export default function Insights() {
   const navigate = useNavigate()
   const showToast = useToast()
   const { user } = useAuth()
-
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState(null)
+  const insightsQuery = useInsightsData(id, user?.id)
 
   useEffect(() => {
-    if (!id || !user?.id) return
-
-    async function loadInsights() {
-      setLoading(true)
-      try {
-        const nextData = await fetchInsightsData(id)
-        setData(nextData)
-      } catch (error) {
-        showToast(error.message || 'Failed to load insights', 'error')
-      } finally {
-        setLoading(false)
-      }
+    if (insightsQuery.error) {
+      showToast(insightsQuery.error.message || 'Failed to load insights', 'error')
     }
+  }, [insightsQuery.error, showToast])
 
-    loadInsights()
-  }, [id, showToast, user?.id])
+  const data = insightsQuery.data
+  const loading = insightsQuery.isLoading
 
   const byCategory = useMemo(() => (data?.byCategory || []).map(enrichCategory), [data?.byCategory])
   const maxSpend = Math.max(1, ...(data?.byPerson || []).map((person) => person.amount || 0))

@@ -1,20 +1,29 @@
-import React, { useEffect } from 'react'
+import React, { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ToastProvider, useToast } from './components/Toast'
 import { useAuth } from './hooks/useAuth'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import GroupHome from './pages/GroupHome'
-import PayScreen from './pages/Pay'
-import Insights from './pages/Insights'
-import InsightsPicker from './pages/InsightsPicker'
-import TripSummary from './pages/TripSummary'
-import Activity from './pages/Activity'
-import Profile from './pages/Profile'
-import JoinInvite from './pages/JoinInvite'
-import Terms from './pages/Terms'
-import Privacy from './pages/Privacy'
-import AuthVerified from './pages/AuthVerified'
+
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const GroupHome = lazy(() => import('./pages/GroupHome'))
+const PayScreen = lazy(() => import('./pages/Pay'))
+const Insights = lazy(() => import('./pages/Insights'))
+const InsightsPicker = lazy(() => import('./pages/InsightsPicker'))
+const TripSummary = lazy(() => import('./pages/TripSummary'))
+const Activity = lazy(() => import('./pages/Activity'))
+const Profile = lazy(() => import('./pages/Profile'))
+const JoinInvite = lazy(() => import('./pages/JoinInvite'))
+const Terms = lazy(() => import('./pages/Terms'))
+const Privacy = lazy(() => import('./pages/Privacy'))
+const AuthVerified = lazy(() => import('./pages/AuthVerified'))
+
+function PageFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+    </div>
+  )
+}
 
 function RequireAuth({ children }) {
   const { user, loading, session } = useAuth()
@@ -66,7 +75,8 @@ export default function App() {
   return (
     <ToastProvider>
       <BrowserRouter>
-        <Routes>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
             <Route
               path="/login"
               element={
@@ -152,7 +162,8 @@ export default function App() {
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ToastProvider>
   )

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
+import { useDashboardData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
-import { fetchDashboardData } from '../lib/kakiSplitApi'
 import { formatMoney, timeAgo } from '../lib/format'
 
 function ActivityGroupRow({ group, usersById, onOpen }) {
@@ -62,40 +62,17 @@ export default function Activity() {
   const navigate = useNavigate()
   const showToast = useToast()
   const { user } = useAuth()
-
-  const [groups, setGroups] = useState([])
-  const [usersById, setUsersById] = useState({})
-  const [loading, setLoading] = useState(true)
+  const dashboardQuery = useDashboardData(user?.id)
 
   useEffect(() => {
-    if (!user?.id) return
-
-    let cancelled = false
-
-    async function loadActivity() {
-      setLoading(true)
-      try {
-        const data = await fetchDashboardData(user.id)
-        if (cancelled) return
-        setGroups(data.groups || [])
-        setUsersById(data.usersById || {})
-      } catch (error) {
-        if (!cancelled) {
-          showToast(error.message || 'Failed to load activity', 'error')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    if (dashboardQuery.error) {
+      showToast(dashboardQuery.error.message || 'Failed to load activity', 'error')
     }
+  }, [dashboardQuery.error, showToast])
 
-    loadActivity()
-
-    return () => {
-      cancelled = true
-    }
-  }, [showToast, user?.id])
+  const groups = dashboardQuery.data?.groups || []
+  const usersById = dashboardQuery.data?.usersById || {}
+  const loading = dashboardQuery.isLoading
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">

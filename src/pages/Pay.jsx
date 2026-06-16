@@ -4,8 +4,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
+import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
-import { fetchGroupData, recordPayment } from '../lib/kakiSplitApi'
+import { recordPayment } from '../lib/kakiSplitApi'
 import { formatMoney } from '../lib/format'
 import { buildPayNowPayload, buildPayLahDeepLink, normalizePayNowProxy } from '../lib/paynow'
 
@@ -57,14 +58,13 @@ export default function PayScreen() {
   const [searchParams] = useSearchParams()
   const showToast = useToast()
   const { user } = useAuth()
+  const { invalidateGroup } = useAppQueryInvalidation()
+  const groupQuery = useGroupData({ groupId: id, userId: user?.id })
 
   const fromId = searchParams.get('from') || user?.id
   const toId = searchParams.get('to')
   const amountFromQuery = Number.parseFloat(searchParams.get('amount') || '0')
 
-  const [group, setGroup] = useState(null)
-  const [usersById, setUsersById] = useState({})
-  const [loading, setLoading] = useState(true)
   const [partial, setPartial] = useState('')
   const [showPartial, setShowPartial] = useState(false)
   const [done, setDone] = useState(false)
@@ -74,23 +74,14 @@ export default function PayScreen() {
   const [recording, setRecording] = useState(false)
 
   useEffect(() => {
-    if (!id || !user?.id) return
-
-    async function loadData() {
-      setLoading(true)
-      try {
-        const data = await fetchGroupData({ groupId: id, userId: user.id })
-        setGroup(data?.group || null)
-        setUsersById(data?.usersById || {})
-      } catch (error) {
-        showToast(error.message || 'Failed to load payment details', 'error')
-      } finally {
-        setLoading(false)
-      }
+    if (groupQuery.error) {
+      showToast(groupQuery.error.message || 'Failed to load payment details', 'error')
     }
+  }, [groupQuery.error, showToast])
 
-    loadData()
-  }, [id, showToast, user?.id])
+  const group = groupQuery.data?.group || null
+  const usersById = groupQuery.data?.usersById || {}
+  const loading = groupQuery.isLoading
 
   const fromUser = usersById[fromId]
   const toUser = usersById[toId]
@@ -132,6 +123,7 @@ export default function PayScreen() {
         createdBy: user.id,
       })
 
+      await invalidateGroup({ groupId: group.id, userId: user.id })
       setDone(true)
       setShowConfirm(false)
       window.setTimeout(() => navigate(`/groups/${id}`), 1300)

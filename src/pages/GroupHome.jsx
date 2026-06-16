@@ -6,6 +6,7 @@ import BottomSheet from '../components/BottomSheet'
 import ThemeToggle from '../components/ThemeToggle'
 import QuickSplit from './QuickSplit'
 import { useToast } from '../components/Toast'
+import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
 import {
   addExpense,
@@ -247,6 +248,8 @@ export default function GroupHome() {
   const location = useLocation()
   const showToast = useToast()
   const { user } = useAuth()
+  const { invalidateGroup } = useAppQueryInvalidation()
+  const groupQuery = useGroupData({ groupId: id, userId: user?.id })
 
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])
@@ -255,7 +258,6 @@ export default function GroupHome() {
   const [payments, setPayments] = useState([])
   const [activityEvents, setActivityEvents] = useState([])
   const [balances, setBalances] = useState([])
-  const [loading, setLoading] = useState(true)
 
   const [showQuickSplit, setShowQuickSplit] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -290,12 +292,7 @@ export default function GroupHome() {
   })
   const onboardingHandledRef = useRef(false)
 
-  const loadGroup = async () => {
-    if (!id || !user?.id) return
-
-    setLoading(true)
-    try {
-        const data = await fetchGroupData({ groupId: id, userId: user.id })
+  const applyGroupData = (data) => {
         if (!data) {
           if (localStorage.getItem('kakisplit:lastGroupId') === id) {
             localStorage.removeItem('kakisplit:lastGroupId')
@@ -330,18 +327,17 @@ export default function GroupHome() {
             daily_reminder_enabled: true,
           })
         }
-
-    } catch (error) {
-      showToast(error.message || 'Failed to load group', 'error')
-    } finally {
-      setLoading(false)
-    }
   }
 
   useEffect(() => {
-    loadGroup()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user?.id])
+    if (groupQuery.data) applyGroupData(groupQuery.data)
+  }, [groupQuery.data])
+
+  useEffect(() => {
+    if (groupQuery.error) {
+      showToast(groupQuery.error.message || 'Failed to load group', 'error')
+    }
+  }, [groupQuery.error, showToast])
 
   useEffect(() => {
     if (!group?.id || telegramConnected || onboardingHandledRef.current) return
@@ -383,7 +379,7 @@ export default function GroupHome() {
 
     const interval = window.setInterval(async () => {
       try {
-        const data = await fetchGroupData({ groupId: group.id, userId: user.id })
+        const data = await fetchGroupData({ groupId: group.id, userId: user.id, skipCache: true })
         if (!cancelled && data?.group?.telegram_connected) {
           setTelegramConnected(true)
           setTelegramGroupName(data.group.telegram_group_name || null)
@@ -407,7 +403,7 @@ export default function GroupHome() {
     }
   }, [showTelegramSheet, showTelegramOnboarding, telegramConnected, group, user?.id, showToast])
 
-  if (loading) {
+  if (groupQuery.isLoading && !group) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
@@ -500,7 +496,7 @@ export default function GroupHome() {
 
       setShowQuickSplit(false)
       showToast('Expense added!', 'success')
-      await loadGroup()
+      await invalidateGroup({ groupId: id, userId: user.id })
     } catch (error) {
       showToast(error.message || 'Unable to add expense', 'error')
     } finally {
@@ -594,7 +590,7 @@ export default function GroupHome() {
       setTelegramCodeExpiresAt(null)
       setTelegramCodeCopied(false)
       showToast('Telegram disconnected', 'success')
-      await loadGroup()
+      await invalidateGroup({ groupId: group.id, userId: user.id })
     } catch (error) {
       showToast(error.message || 'Unable to disconnect Telegram', 'error')
     }
@@ -621,6 +617,7 @@ export default function GroupHome() {
       setGroupNameDraft(updated?.name || trimmed)
       showToast('Group name updated', 'success')
       setShowEditGroupNameSheet(false)
+      await invalidateGroup({ groupId: group.id, userId: user.id })
     } catch (error) {
       showToast(error.message || 'Unable to update group name', 'error')
     } finally {
@@ -644,7 +641,7 @@ export default function GroupHome() {
       setShowClearConfirmSheet(false)
       setShowMenu(false)
       setClearConfirmText('')
-      await loadGroup()
+      await invalidateGroup({ groupId: group.id, userId: user.id })
     } catch (error) {
       showToast(error.message || 'Unable to clear activity', 'error')
     } finally {
@@ -668,7 +665,7 @@ export default function GroupHome() {
       })
       showToast('Activity item deleted', 'success')
       setSelectedDeleteId('')
-      await loadGroup()
+      await invalidateGroup({ groupId: group.id, userId: user.id })
     } catch (error) {
       showToast(error.message || 'Unable to delete item', 'error')
     } finally {
@@ -689,6 +686,7 @@ export default function GroupHome() {
         localStorage.removeItem('kakisplit:lastGroupId')
       }
       showToast('Group deleted', 'success')
+      await invalidateGroup({ groupId: group.id, userId: user.id })
       navigate('/dashboard', { replace: true })
     } catch (error) {
       showToast(error.message || 'Unable to delete group', 'error')

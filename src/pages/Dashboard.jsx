@@ -5,8 +5,9 @@ import BottomNav from '../components/BottomNav'
 import BottomSheet from '../components/BottomSheet'
 import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
+import { useAppQueryInvalidation, useDashboardData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
-import { createGroup, fetchDashboardData } from '../lib/kakiSplitApi'
+import { createGroup } from '../lib/kakiSplitApi'
 import { formatMoney, timeAgo } from '../lib/format'
 
 function GroupCard({ group, usersById, onClick }) {
@@ -60,44 +61,23 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const showToast = useToast()
   const { user, profile } = useAuth()
+  const { invalidateDashboard } = useAppQueryInvalidation()
+  const dashboardQuery = useDashboardData(user?.id)
 
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [currency, setCurrency] = useState('SGD')
-  const [groups, setGroups] = useState([])
-  const [usersById, setUsersById] = useState({})
-  const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    if (!user?.id) return
-
-    let cancelled = false
-
-    async function loadDashboard() {
-      setLoading(true)
-      try {
-        const data = await fetchDashboardData(user.id)
-        if (cancelled) return
-        setGroups(data.groups)
-        setUsersById(data.usersById)
-      } catch (error) {
-        if (!cancelled) {
-          showToast(error.message || 'Failed to load groups', 'error')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    if (dashboardQuery.error) {
+      showToast(dashboardQuery.error.message || 'Failed to load groups', 'error')
     }
+  }, [dashboardQuery.error, showToast])
 
-    loadDashboard()
-
-    return () => {
-      cancelled = true
-    }
-  }, [showToast, user?.id])
+  const groups = dashboardQuery.data?.groups || []
+  const usersById = dashboardQuery.data?.usersById || {}
+  const loading = dashboardQuery.isLoading
 
   const totalOwed = useMemo(() => groups.reduce((sum, group) => (group.my_balance > 0 ? sum + group.my_balance : sum), 0), [groups])
   const totalOwe = useMemo(() => groups.reduce((sum, group) => (group.my_balance < 0 ? sum + Math.abs(group.my_balance) : sum), 0), [groups])
@@ -118,10 +98,7 @@ export default function Dashboard() {
       showToast('Group created successfully', 'success')
       setShowNewGroup(false)
       setGroupName('')
-
-      const data = await fetchDashboardData(user.id)
-      setGroups(data.groups)
-      setUsersById(data.usersById)
+      await invalidateDashboard(user.id)
         navigate(`/groups/${newGroup.id}`, {
           state: { openTelegramOnboarding: true },
         })

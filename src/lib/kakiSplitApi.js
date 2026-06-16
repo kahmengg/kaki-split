@@ -1352,12 +1352,12 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
   return { scanned: rows.length, queued }
 }
 
-export async function fetchGroupData({ groupId, userId = null }) {
+export async function fetchGroupData({ groupId, userId = null, skipCache = false }) {
   const cacheKey = `${String(groupId || '')}::${userId ? String(userId) : 'all'}`
-  const cached = getFreshReadCache(groupReadCache, cacheKey)
+  const cached = skipCache ? null : getFreshReadCache(groupReadCache, cacheKey)
   if (cached) return cached
 
-  if (inFlightGroupRequests.has(cacheKey)) {
+  if (!skipCache && inFlightGroupRequests.has(cacheKey)) {
     return inFlightGroupRequests.get(cacheKey)
   }
 

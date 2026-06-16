@@ -1,48 +1,26 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav'
 import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
+import { useDashboardData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
-import { fetchDashboardData } from '../lib/kakiSplitApi'
 import { formatMoney, timeAgo } from '../lib/format'
 
 export default function InsightsPicker() {
   const navigate = useNavigate()
   const showToast = useToast()
   const { user } = useAuth()
-
-  const [groups, setGroups] = useState([])
-  const [loading, setLoading] = useState(true)
+  const dashboardQuery = useDashboardData(user?.id)
 
   useEffect(() => {
-    if (!user?.id) return
-
-    let cancelled = false
-
-    async function loadGroups() {
-      setLoading(true)
-      try {
-        const data = await fetchDashboardData(user.id)
-        if (cancelled) return
-        setGroups(data.groups || [])
-      } catch (error) {
-        if (!cancelled) {
-          showToast(error.message || 'Failed to load groups', 'error')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    if (dashboardQuery.error) {
+      showToast(dashboardQuery.error.message || 'Failed to load groups', 'error')
     }
+  }, [dashboardQuery.error, showToast])
 
-    loadGroups()
-
-    return () => {
-      cancelled = true
-    }
-  }, [showToast, user?.id])
+  const groups = dashboardQuery.data?.groups || []
+  const loading = dashboardQuery.isLoading
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
