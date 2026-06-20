@@ -22,7 +22,10 @@ export default function Privacy() {
         <p className="text-sm text-gray-600 mt-2">We do not sell personal data. Data is shared only to provide core app functionality.</p>
 
         <h2 className="text-lg font-bold text-gray-900 mt-6">Your choices</h2>
-        <p className="text-sm text-gray-600 mt-2">You can update profile information in-app. To request account/data deletion, contact the app owner.</p>
+        <p className="text-sm text-gray-600 mt-2">
+          You can update profile information in-app. You can also delete your account data from Profile, which removes
+          personal profile and payment details while preserving shared group history needed by other members.
+        </p>
 
         <div className="mt-8">
           <Link to="/login" className="text-sm font-semibold text-sky-600 hover:text-sky-700">

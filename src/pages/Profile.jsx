@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
+import BottomSheet from '../components/BottomSheet'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import ThemeToggle from '../components/ThemeToggle'
-import { removeAvatar, saveProfile, uploadAvatar } from '../lib/kakiSplitApi'
+import { deleteAccountData, removeAvatar, saveProfile, uploadAvatar } from '../lib/kakiSplitApi'
 
 function normalizeSingaporePhone(value) {
   const digits = String(value || '').replace(/\D/g, '')
@@ -28,6 +29,8 @@ export default function Profile() {
   const [uploading, setUploading] = useState(false)
   const [removingAvatar, setRemovingAvatar] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -125,6 +128,19 @@ export default function Profile() {
       showToast(error.message || 'Unable to sign out', 'error')
     } finally {
       setSigningOut(false)
+    }
+  }
+
+  const handleDeleteAccountData = async () => {
+    setDeletingAccount(true)
+    try {
+      await deleteAccountData()
+      await signOut()
+      showToast('Account data deleted', 'success')
+      navigate('/login', { replace: true })
+    } catch (error) {
+      showToast(error.message || 'Unable to delete account data', 'error')
+      setDeletingAccount(false)
     }
   }
 
@@ -256,9 +272,53 @@ export default function Profile() {
             </button>
           </div>
 
+          <div className="bg-white rounded-2xl border border-red-100 overflow-hidden shadow-sm">
+            <button
+              onClick={() => setShowDeleteAccount(true)}
+              disabled={deletingAccount || signingOut}
+              className="w-full px-4 py-4 flex items-center gap-3 text-left disabled:opacity-60"
+            >
+              <div className="w-8 h-8 bg-red-50 rounded-xl flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673A2.25 2.25 0 0115.916 21H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </div>
+              <div>
+                <span className="block text-red-500 font-semibold text-sm">Delete account data</span>
+                <span className="block text-xs text-gray-400 mt-0.5">Remove profile and payment details from Kaki Split.</span>
+              </div>
+            </button>
+          </div>
+
 
         <p className="text-center text-xs text-gray-300 pb-2">Kaki Split v1.0</p>
       </div>
+
+      <BottomSheet isOpen={showDeleteAccount} onClose={() => (!deletingAccount ? setShowDeleteAccount(false) : null)} title="Delete account data">
+        <div className="px-5 py-5 space-y-4">
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+            <p className="text-sm font-bold text-red-700">This removes your personal details.</p>
+            <p className="mt-1 text-sm text-red-600">
+              Your display name, email, profile photo, and PayNow number will be removed. Existing group expenses stay in group history as
+              "Deleted user" so other members' balances are not broken.
+            </p>
+          </div>
+          <button
+            onClick={handleDeleteAccountData}
+            disabled={deletingAccount}
+            className="w-full rounded-full bg-red-500 py-4 text-sm font-bold text-white disabled:opacity-60"
+          >
+            {deletingAccount ? 'Deleting...' : 'Delete my account data'}
+          </button>
+          <button
+            onClick={() => setShowDeleteAccount(false)}
+            disabled={deletingAccount}
+            className="w-full rounded-full bg-gray-100 py-4 text-sm font-bold text-gray-700 disabled:opacity-60"
+          >
+            Keep my account
+          </button>
+        </div>
+      </BottomSheet>
 
       <BottomNav onFABPress={() => navigate('/dashboard')} />
     </div>

@@ -1017,6 +1017,25 @@ export async function fetchDeletedActivityLogs({ groupId }) {
   return payload?.logs || []
 }
 
+export async function deleteAccountData() {
+  const accessToken = await getSessionAccessToken('Please sign in again to delete your account data')
+
+  const response = await fetch('/api/account/delete', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Unable to delete account data')
+  }
+
+  clearReadCaches()
+  return payload || { ok: true }
+}
+
 export async function createTelegramLinkToken({ groupId, createdBy }) {
   if (!groupId || !createdBy) throw new Error('Group and user are required')
 
