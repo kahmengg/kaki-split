@@ -716,7 +716,7 @@ export default function GroupHome() {
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-black text-gray-900 truncate">{group.name}</h1>
                 <p className="text-gray-400 text-xs">
-                  {members.length} members · {formatMoney(group.total_spent, group.base_currency)} total
+                  {members.length} members &middot; {formatMoney(group.total_spent, group.base_currency)} total
                 </p>
 
             </div>
@@ -772,7 +772,7 @@ export default function GroupHome() {
               &times;
             </button>
               <p className="text-amber-800 text-xs font-medium leading-relaxed">
-                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you - you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} ·{' '}
+                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you - you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} &middot;{' '}
                 <button onClick={() => handlePay(debtReminder)} className="text-sky-600 font-bold">
                   Pay now &rarr;
                 </button>
@@ -908,7 +908,7 @@ export default function GroupHome() {
             className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
           >
             <span className="text-xl w-8 text-center">&#128172;</span>
-            <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '✓ Telegram Connected' : 'Connect Telegram'}</span>
+            <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '\u2713 Telegram Connected' : 'Connect Telegram'}</span>
           </button>
         </div>
       </BottomSheet>
@@ -995,7 +995,7 @@ export default function GroupHome() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold uppercase tracking-wide text-gray-400">{log.item_type}</p>
                         <p className="font-bold text-gray-900 text-sm truncate mt-0.5">{title}</p>
-                        <p className="text-xs text-gray-500 mt-1">Deleted by {deletedBy} · {timeAgo(log.deleted_at)}</p>
+                        <p className="text-xs text-gray-500 mt-1">Deleted by {deletedBy} &middot; {timeAgo(log.deleted_at)}</p>
                       </div>
                       <p className="font-bold text-gray-900 text-sm flex-shrink-0">{formatMoney(amount, currency)}</p>
                     </div>

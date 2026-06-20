@@ -1,29 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import ThemeToggle from '../components/ThemeToggle'
+import { Link, useLocation } from 'react-router-dom'
 import AppLogo from '../components/AppLogo'
+import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 
-const socialProof = [
-  { label: 'Add expenses in seconds', value: 'Fast' },
-  { label: 'Clear balances', value: 'Simple' },
-  { label: 'Group-first flow', value: 'Friendly' },
-]
-
-const whyKakiSplit = [
-  'Built for roommates and trips, not accounting spreadsheets.',
-  'Less tapping, less confusion, and cleaner settle-up summaries.',
-  'Made for your group style, with a lighter and friendlier flow.',
+const valuePoints = [
+  { text: 'Receipt scans for faster entry', color: 'bg-teal-500' },
+  { text: 'Telegram reminders before it gets awkward', color: 'bg-blue-500' },
+  { text: 'PayNow-ready settle ups', color: 'bg-amber-500' },
 ]
 
 export default function Login() {
-  const navigate = useNavigate()
   const location = useLocation()
   const showToast = useToast()
-  const { signIn, signUp, signInWithGoogle, resendSignupConfirmation } = useAuth()
+  const { signInWithGoogle } = useAuth()
   const { isDark } = useTheme()
+  const [loading, setLoading] = useState(false)
 
   const pendingInviteCode = useMemo(() => {
     const fromQuery = new URLSearchParams(location.search).get('invite')
@@ -38,120 +32,22 @@ export default function Login() {
     return '/dashboard'
   }, [pendingInviteCode])
 
-  const verificationRedirectPath = useMemo(() => {
-    const encodedNext = encodeURIComponent(postAuthPath)
-    return `/auth/verified?next=${encodedNext}`
-  }, [postAuthPath])
-
-  const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [loadingSource, setLoadingSource] = useState('password')
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
-  const [resendingVerification, setResendingVerification] = useState(false)
-
-  const isEmailConfirmationRequiredError = (error) => {
-    const message = String(error?.message || '').toLowerCase()
-    return message.includes('email not confirmed') || message.includes('email not verified')
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoadingSource('password')
-    setLoading(true)
-
-    try {
-      if (mode === 'signup') {
-          const result = await signUp({ email, password, name, redirectPath: verificationRedirectPath })
-
-        const normalizedEmail = String(email || '').trim().toLowerCase()
-        const hasGoogleIdentity = Array.isArray(result?.user?.identities)
-          ? result.user.identities.some((identity) => identity?.provider === 'google')
-          : false
-
-        if (result?.isExistingUser) {
-          if (hasGoogleIdentity) {
-            showToast('This email already uses Google sign-in. Please continue with Google.', 'error')
-          } else {
-            showToast('This email is already registered. Please sign in instead.', 'error')
-          }
-          setMode('login')
-          setPendingVerificationEmail('')
-          setPassword('')
-          return
-        }
-
-        if (!result?.emailConfirmationSent) {
-          showToast('Signup received, but verification email was not sent yet. Please wait a minute and tap resend.', 'error')
-        } else {
-          showToast('Account created! Check your email to confirm, then sign in.', 'success')
-        }
-
-        setPendingVerificationEmail(normalizedEmail)
-        setMode('login')
-        setPassword('')
-      } else {
-        await signIn({ email, password })
-          setPendingVerificationEmail('')
-          showToast('Signed in successfully', 'success')
-          navigate(postAuthPath)
-
-      }
-    } catch (error) {
-      if (mode === 'login' && isEmailConfirmationRequiredError(error)) {
-        const normalizedEmail = String(email || '').trim().toLowerCase()
-        if (normalizedEmail) setPendingVerificationEmail(normalizedEmail)
-        showToast('Please verify your email before signing in. You can resend the verification email below.', 'error')
-      } else {
-        showToast(error.message || 'Unable to authenticate right now', 'error')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleResendVerification = async () => {
-    if (!pendingVerificationEmail || resendingVerification) return
-
-    setResendingVerification(true)
-    try {
-        await resendSignupConfirmation({ email: pendingVerificationEmail, redirectPath: verificationRedirectPath })
-
-      showToast(`Verification email sent to ${pendingVerificationEmail}.`, 'success')
-    } catch (error) {
-      showToast(error.message || 'Unable to resend verification email right now.', 'error')
-    } finally {
-      setResendingVerification(false)
-    }
-  }
-
   const handleGoogle = async () => {
-    setLoadingSource('google')
     setLoading(true)
     try {
-        await signInWithGoogle({ redirectPath: postAuthPath })
-
+      // Keep login Google-only so users do not have to choose an auth method.
+      await signInWithGoogle({ redirectPath: postAuthPath })
     } catch (error) {
-      showToast(error.message || 'Google sign-in failed. Please use email & password.', 'error')
+      showToast(error.message || 'Google sign-in failed. Please try again.', 'error')
       setLoading(false)
-      setLoadingSource('password')
     }
   }
 
   useEffect(() => {
-    if (loadingSource !== 'google') return
+    if (!loading) return
 
-    const timeoutId = window.setTimeout(() => {
-      setLoading(false)
-      setLoadingSource('password')
-    }, 8000)
-
-    const handleFocus = () => {
-      setLoading(false)
-      setLoadingSource('password')
-    }
+    const timeoutId = window.setTimeout(() => setLoading(false), 8000)
+    const handleFocus = () => setLoading(false)
 
     window.addEventListener('focus', handleFocus)
 
@@ -159,219 +55,107 @@ export default function Login() {
       window.clearTimeout(timeoutId)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [loadingSource])
+  }, [loading])
 
-    return (
-      <div className={`min-h-screen relative overflow-hidden transition-colors ${isDark ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-slate-100' : 'bg-gradient-to-b from-sky-50 via-white to-cyan-50 text-slate-900'}`}>
-        {loading && loadingSource === 'google' && (
-          <div className={`absolute inset-0 z-30 backdrop-blur-sm flex items-center justify-center px-6 ${isDark ? 'bg-slate-950/70' : 'bg-white/75'}`}>
-            <div className={`rounded-3xl px-6 py-5 border text-center max-w-xs w-full ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-sky-100 shadow-xl'}`}>
-              <div className="w-9 h-9 mx-auto border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
-              <p className={`text-sm font-semibold mt-3 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Opening Google sign-in...</p>
-              <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>You'll be redirected in a moment.</p>
+  return (
+    <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-sky-50 text-slate-950'}`}>
+      {loading && (
+        <div className={`fixed inset-0 z-30 flex items-center justify-center px-6 backdrop-blur-sm ${isDark ? 'bg-slate-950/75' : 'bg-white/75'}`}>
+          <div className={`w-full max-w-xs rounded-3xl px-6 py-5 text-center shadow-xl ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
+            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-sky-200 border-t-sky-500" />
+            <p className={`mt-3 text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Opening Google sign-in...</p>
+            <p className={`mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>You'll be redirected in a moment.</p>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col px-6 pt-4" style={{ paddingBottom: 'max(22px, env(safe-area-inset-bottom))' }}>
+        <header className="flex items-center justify-end">
+          <ThemeToggle className="px-2.5 py-1" />
+        </header>
+
+        <main className="flex flex-1 flex-col justify-between">
+          <section className="pt-3">
+            <div className="flex flex-col items-center">
+              <AppLogo size="lg" />
+              <p
+                className={`mt-3 text-center text-[2.7rem] font-extrabold leading-none tracking-[-0.025em] ${isDark ? 'text-white' : 'text-slate-950'}`}
+                style={{ fontFamily: '"Poppins", "Avenir Next", "Montserrat", "Proxima Nova", "Inter", system-ui, sans-serif' }}
+              >
+                kaki<span className="text-blue-500">split</span>
+              </p>
             </div>
-          </div>
-        )}
 
-        <div className={`absolute -top-16 -right-12 h-56 w-56 rounded-full blur-2xl ${isDark ? 'bg-sky-900/20' : 'bg-sky-300/40'}`} />
-        <div className={`absolute top-48 -left-20 h-64 w-64 rounded-full blur-2xl ${isDark ? 'bg-cyan-900/20' : 'bg-cyan-300/35'}`} />
-        <div className={`absolute bottom-20 right-0 h-56 w-56 rounded-full blur-3xl ${isDark ? 'bg-sky-900/20' : 'bg-sky-300/35'}`} />
+            <div className="mt-7">
+              <h1 className={`text-[2.55rem] font-black leading-[1.02] tracking-tight ${isDark ? 'text-white' : 'text-slate-950'}`}>
+                Split fast.
+                <span className="block text-amber-500">Stay friends.</span>
+              </h1>
+              <p className={`mt-5 max-w-[340px] text-[15px] leading-7 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                A cleaner way to manage shared meals, trips, and hangouts without awkward money chats.
+              </p>
+            </div>
 
-
-        <div className="relative z-10 px-5 pt-6 pb-6 space-y-4">
-              <header className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <AppLogo size="md" showWordmark />
-              </div>
-                <div className="flex items-center gap-2">
-                  <ThemeToggle className="px-2.5 py-1" />
-                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${isDark ? 'text-slate-300 bg-slate-800/80 border-slate-600' : 'text-sky-700 bg-white/90 border-sky-100'}`}>Trusted by friend groups</span>
-                </div>
-              </header>
-
-
-
-            <section className="space-y-3">
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${isDark ? 'border-sky-700/70 bg-sky-900/20' : 'border-sky-200 bg-white shadow-sm'}`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                <span className={`text-[11px] font-semibold tracking-wide ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>Split fast. Settle cleanly.</span>
-              </div>
-
-              <h1 className={`text-[1.8rem] font-black leading-tight tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                  Why KakiSplit?
-                  <span className="block text-sky-500">Split fast. Stay friends.</span>
-                </h1>
-
-                <p className={`text-sm leading-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                  Splitwise is great for general expense tracking. KakiSplit is focused on tighter group flows,
-                  so shared spending feels quicker, clearer, and less awkward.
-                </p>
-
-
-              {pendingInviteCode && (
-                <div className={`rounded-2xl border px-3 py-2 ${isDark ? 'border-sky-700/70 bg-sky-900/25' : 'border-sky-200 bg-sky-50'}`}>
-                  <p className={`text-xs font-semibold ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>You were invited to a group</p>
-                  <p className={`text-[11px] mt-0.5 ${isDark ? 'text-sky-300/80' : 'text-sky-700/80'}`}>Sign in and we will join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
-                </div>
-              )}
-
-                <div className="grid grid-cols-3 gap-2">
-                  {socialProof.map((item) => (
-                    <div key={item.label} className={`rounded-xl border px-2.5 py-2 text-center ${isDark ? 'border-slate-600 bg-slate-800' : 'border-sky-100 bg-white shadow-sm'}`}>
-                      <p className={`text-sm font-black leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</p>
-                      <p className={`text-[10px] mt-1 leading-tight ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <ul className="space-y-1.5">
-                  {whyKakiSplit.map((point) => (
-                    <li key={point} className={`flex items-start gap-2 text-xs leading-5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-sky-500" />
-                      <span>{point}</span>
-                    </li>
-                  ))}
-                </ul>
-
-            </section>
-
-          <section className={`rounded-[28px] text-gray-900 border p-5 backdrop-blur-sm ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white/95 border-sky-100 shadow-[0_18px_40px_rgba(14,165,233,0.12)]'}`}>
-
-          <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
-            <button
-              onClick={() => setMode('login')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${mode === 'login' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-            >
-              Sign in
-            </button>
-            <button
-              onClick={() => setMode('signup')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${mode === 'signup' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-            >
-              Create account
-            </button>
-          </div>
-
-          <button
-            onClick={handleGoogle}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors font-semibold text-gray-700 text-sm disabled:opacity-60"
-          >
-            {loading && loadingSource === 'google' ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
-                </svg>
-                Redirecting to Google...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Continue with Google
-              </>
-            )}
-          </button>
-
-          <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">or continue with email</span>
-            <div className="flex-1 h-px bg-gray-200" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {mode === 'signup' && (
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
-                  required={mode === 'signup'}
-                />
+            {pendingInviteCode && (
+              <div className={`mt-7 rounded-3xl px-4 py-3 ${isDark ? 'bg-sky-950/60 text-sky-200' : 'bg-white/80 text-sky-800 shadow-sm'}`}>
+                <p className="text-xs font-bold">Group invite ready</p>
+                <p className="mt-1 text-xs">Sign in to join code <span className="font-mono font-bold">{pendingInviteCode}</span>.</p>
               </div>
             )}
 
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
-                required
-              />
+            <div className="mt-10 grid gap-3">
+              {valuePoints.map((point) => (
+                <div key={point.text} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-white/70 shadow-sm'}`}>
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full ${point.color} text-[11px] font-black text-white`}>&#10003;</span>
+                  <span className={`text-sm font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{point.text}</span>
+                </div>
+              ))}
             </div>
+          </section>
 
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition"
-                required
-              />
-            </div>
-
+          <section className="pt-8">
             <button
-              type="submit"
+              onClick={handleGoogle}
               disabled={loading}
-              className="w-full py-3.5 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 active:bg-sky-700 transition-colors disabled:opacity-60 mt-1"
-              style={{ boxShadow: '0 8px 20px rgba(14, 165, 233, 0.3)' }}
+              className={`flex w-full items-center justify-center gap-3 rounded-2xl py-4 text-sm font-black shadow-[0_18px_36px_rgba(14,165,233,0.16)] transition-transform active:scale-[0.99] disabled:opacity-60 ${
+                isDark
+                  ? 'bg-white/10 text-white ring-1 ring-sky-400/30'
+                  : 'bg-white/85 text-slate-900 ring-1 ring-sky-200'
+              }`}
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
                   </svg>
-                  {mode === 'signup' ? 'Creating account...' : 'Signing in...'}
-                </span>
-              ) : mode === 'signup' ? (
-                'Create account'
+                  Redirecting to Google...
+                </>
               ) : (
-                'Sign in'
+                <>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                  Continue with Google
+                </>
               )}
             </button>
-            </form>
 
-            {pendingVerificationEmail && mode === 'login' && (
-              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                <p className="text-[11px] text-amber-800">
-                  Not verified yet? We can resend the confirmation link to <span className="font-semibold">{pendingVerificationEmail}</span>.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  disabled={resendingVerification}
-                  className="mt-2 inline-flex items-center justify-center rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
-                >
-                  {resendingVerification ? 'Sending...' : 'Resend verification email'}
-                </button>
-              </div>
-            )}
-  
-              <p className="text-center text-xs text-gray-400 mt-4">
-                By continuing, you agree to our{' '}
-                <Link to="/terms" className="font-semibold text-sky-600 hover:text-sky-700">
-                  Terms
-                </Link>{' '}
-                and{' '}
-                <Link to="/privacy" className="font-semibold text-sky-600 hover:text-sky-700">
-                  Privacy Policy
-                </Link>
-                .
-              </p>
-
-        </section>
+            <p className={`mx-auto mt-4 max-w-xs text-center text-xs leading-5 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
+              By continuing, you agree to our{' '}
+              <Link to="/terms" className="font-semibold text-sky-600">
+                Terms
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" className="font-semibold text-sky-600">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          </section>
+        </main>
       </div>
     </div>
   )

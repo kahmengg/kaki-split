@@ -41,7 +41,7 @@ export default function TripSummary() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${data.group.name} — Trip Summary`,
+          title: `${data.group.name} - Trip Summary`,
           text: `${shareText} Check it out on Kaki Split.`,
         })
       } catch {
@@ -143,7 +143,7 @@ export default function TripSummary() {
               )}
 
               <div className="flex items-center justify-between pt-3 border-t border-white/20">
-                <p className="text-white/60 text-xs">{members.length} friends · powered by Kaki Split</p>
+                <p className="text-white/60 text-xs">{members.length} friends &middot; powered by Kaki Split</p>
                 <p className="text-white/60 text-xs">kakisplit.app</p>
               </div>
             </div>

@@ -64,11 +64,3 @@ export function buildPayNowPayload({ proxy, amount, editable = false, reference 
   return payload
 }
 
-export function buildPayLahDeepLink({ proxy, amount, name }) {
-  const params = new URLSearchParams()
-  if (proxy) params.set('to', normalizePayNowProxy(proxy) || proxy)
-  if (amount != null) params.set('amount', Number(amount).toFixed(2))
-  if (name) params.set('memo', `Pay ${name}`)
-  const qs = params.toString()
-  return `dbspaylah://pay${qs ? `?${qs}` : ''}`
-}

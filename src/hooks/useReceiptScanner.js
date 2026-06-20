@@ -1,5 +1,25 @@
 import { useState } from 'react'
 
+function getReceiptScanMessage(code, details = '') {
+  const normalizedCode = String(code || '').trim()
+  const normalizedDetails = String(details || '').toLowerCase()
+
+  if (normalizedDetails.includes('failed to fetch') || normalizedDetails.includes('network')) {
+    return 'Receipt scanning could not connect. Check your connection and try again.'
+  }
+
+  const messages = {
+    image_required: 'Choose a receipt image first.',
+    unsupported_mime_type: 'Use a JPEG, PNG, or WebP receipt image.',
+    image_too_large: 'This image is too large. Try a smaller photo or screenshot.',
+    unreadable: "I couldn't read this receipt clearly. Try a sharper, well-lit photo with the full receipt visible.",
+    parse_failed: "I couldn't extract receipt details from this image. Try a clearer photo, or enter the expense manually.",
+    missing_gemini_api_key: 'Receipt scanning is not configured yet.',
+  }
+
+  return messages[normalizedCode] || "I couldn't scan this receipt. Try a clearer photo or enter it manually."
+}
+
 export function useReceiptScanner() {
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState(null)
@@ -33,18 +53,17 @@ export function useReceiptScanner() {
 
       const data = await response.json().catch(() => null)
       if (!response.ok) {
-        const serverMessage = [data?.error, data?.details].filter(Boolean).join(': ')
-        throw new Error(serverMessage || 'scan_failed')
+        // Keep server error codes internal and show people a useful next step.
+        throw new Error(getReceiptScanMessage(data?.error, data?.details))
       }
 
       if (data?.error) {
-        const serverMessage = [data?.error, data?.details].filter(Boolean).join(': ')
-        throw new Error(serverMessage)
+        throw new Error(getReceiptScanMessage(data.error, data?.details))
       }
 
       return data
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'scan_failed'
+      const message = err instanceof Error ? err.message : getReceiptScanMessage('scan_failed')
       setError(message)
       return null
     } finally {

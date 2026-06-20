@@ -421,7 +421,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
             {amount && splitMembers.length > 1 && splitType === 'equal' && (
 
             <p className="text-sky-600 text-sm font-medium mt-1">
-              {formatMoney(perPersonAmount, currency)} each · {splitMembers.length} people
+              {formatMoney(perPersonAmount, currency)} each &middot; {splitMembers.length} people
             </p>
           )}
 
@@ -457,7 +457,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
               disabled={scanning}
               className="w-full py-3 rounded-2xl border border-sky-200 bg-sky-50 text-sky-700 font-semibold text-sm disabled:opacity-60"
             >
-              {scanning ? 'Scanning receipt...' : '📷 Scan receipt'}
+              {scanning ? 'Scanning receipt...' : <>&#128247; Scan receipt</>}
             </button>
             <input
               ref={fileInputRef}
@@ -467,7 +467,12 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
               onChange={handleReceiptUpload}
               className="hidden"
             />
-            {scanError && <p className="text-xs text-amber-600">Could not scan receipt: {scanError}</p>}
+            {scanError && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-semibold text-amber-800">{scanError}</p>
+                <p className="text-xs text-amber-700 mt-0.5">You can still enter the expense manually.</p>
+              </div>
+            )}
           </div>
 
           {showAssigner && receiptData && (
@@ -594,7 +599,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                             className="w-8 h-8 rounded-full border border-gray-200 text-gray-500 text-sm"
                             aria-label={`Remove item ${index + 1}`}
                           >
-                            ✕
+                            &times;
                           </button>
                         </div>
 
@@ -662,7 +667,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
                       <span className={`text-sm font-semibold ${included ? 'text-sky-700' : 'text-gray-500'}`}>
                         {member.id === currentUserId ? 'You' : member.display_name}
                       </span>
-                      {included && <span className="text-sky-500 text-xs">✓</span>}
+                      {included && <span className="text-sky-500 text-xs">&#10003;</span>}
                     </button>
                   )
                 })}
@@ -723,7 +728,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
             className="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base disabled:opacity-40 transition-opacity"
             style={{ boxShadow: '0 4px 16px rgba(14, 165, 233, 0.3)' }}
           >
-            {submitting ? 'Adding expense...' : `Add expense ${amount ? `· ${formatMoney(parseFloat(amount) || 0, currency)}` : ''}`}
+            {submitting ? 'Adding expense...' : `Add expense ${amount ? `\u00b7 ${formatMoney(parseFloat(amount) || 0, currency)}` : ''}`}
           </button>
 
         </div>

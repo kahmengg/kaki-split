@@ -19,8 +19,8 @@ export default function Toast({ message, type = 'success', onClose }) {
   }
 
   const icons = {
-    success: '✓',
-    error: '✕',
+    success: '\u2713',
+    error: '\u00d7',
     info: 'ℹ',
   }
 

@@ -15,13 +15,13 @@ Kaki Split is a mobile-first bill-splitting app for trips, meals, and group hang
 
 ## Main Features
 
-- Email/password and Google sign-in through Supabase Auth
+- Google sign-in through Supabase Auth
 - Group creation, invite links, joining by invite code, and owner-only group deletion
 - Equal, exact, and percentage expense splits
 - Shared-item receipt assignment flow for scanned receipts
 - Multi-currency expense entry with FX conversion and cached rates
 - Smart settlement balances based on expense shares and recorded payments
-- Pay screen with PayNow QR payloads and PayLah deep links
+- Pay screen with PayNow QR payloads and manual payment recording
 - Dashboard, group activity, insights, and trip summary screens
 - Profile editing with avatar upload and Singapore payment details
 - Telegram group linking, alert settings, daily reminders, and retrying outbox dispatch

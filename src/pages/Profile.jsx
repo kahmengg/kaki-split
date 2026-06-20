@@ -23,7 +23,6 @@ export default function Profile() {
 
   const [name, setName] = useState('')
   const [paynow, setPaynow] = useState('')
-  const [paylah, setPaylah] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -35,7 +34,6 @@ export default function Profile() {
     setName(profile.display_name || '')
     const oauthPhone = user?.phone || user?.user_metadata?.phone_number || user?.user_metadata?.phone || ''
     setPaynow(normalizeSingaporePhone(profile.paynow_number || oauthPhone))
-    setPaylah(profile.paylah_handle || '')
     setAvatarUrl(profile.avatar_url || '')
   }, [profile, user?.phone])
 
@@ -62,7 +60,6 @@ export default function Profile() {
           profile: {
             display_name: name.trim() || user.email?.split('@')[0] || 'User',
             paynow_number: normalizedPaynow || null,
-            paylah_handle: paylah.trim() || null,
             avatar_url: avatarUrl || null,
           },
         })
@@ -210,13 +207,13 @@ export default function Profile() {
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
           <div className="px-4 pt-4 pb-2">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Payment methods</p>
-            <p className="text-xs text-gray-400 mt-0.5">Let others pay you via these services</p>
+            <p className="text-xs text-gray-400 mt-0.5">Let others pay you with any Singapore banking app.</p>
           </div>
 
           <div className="px-4 pb-4 space-y-3">
             <div>
               <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5">
-                <span className="w-5 h-5 bg-red-50 rounded-lg flex items-center justify-center text-sm">📱</span>
+                <span className="w-5 h-5 bg-red-50 rounded-lg flex items-center justify-center text-sm">&#128241;</span>
                 PayNow number
               </label>
                 <input
@@ -230,20 +227,6 @@ export default function Profile() {
                 />
                 <p className="text-xs text-gray-400 mt-1 ml-1">Enter 8-digit Singapore mobile number</p>
 
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5">
-                <span className="w-5 h-5 bg-blue-50 rounded-lg flex items-center justify-center text-sm">🔵</span>
-                PayLah handle
-              </label>
-              <input
-                type="text"
-                value={paylah}
-                onChange={(event) => setPaylah(event.target.value)}
-                placeholder="@username"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-              />
             </div>
 
           </div>

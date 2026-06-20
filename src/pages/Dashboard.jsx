@@ -25,7 +25,7 @@ function GroupCard({ group, usersById, onClick }) {
         </div>
         <div className="flex-shrink-0 ml-3 text-right">
           {balance === 0 ? (
-            <span className="text-gray-400 text-sm font-medium">Settled ✓</span>
+            <span className="text-gray-400 text-sm font-medium">Settled &#10003;</span>
           ) : balance < 0 ? (
             <div>
               <div className="text-red-500 font-bold text-sm">−{formatMoney(Math.abs(balance), group.base_currency)}</div>
@@ -130,7 +130,7 @@ export default function Dashboard() {
       <div className="bg-white px-5 pt-12 pb-5 border-b border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-2xl font-black text-gray-900">Hi, {currentUser?.display_name || currentUser?.name || 'Friend'} 👋</h1>
+              <h1 className="text-2xl font-black text-gray-900">Hi, {currentUser?.display_name || currentUser?.name || 'Friend'}</h1>
               <p className="text-gray-500 text-sm mt-0.5">Here's your expense overview</p>
             </div>
             <div className="flex items-center gap-2">
@@ -163,7 +163,7 @@ export default function Dashboard() {
           {totalOwe === 0 && totalOwed === 0 && (
             <div className="flex-1 bg-gray-50 rounded-2xl p-3 border border-gray-100">
               <div className="text-xs text-gray-400 font-medium">All balances</div>
-              <div className="text-gray-700 font-bold text-lg">Settled up ✓</div>
+              <div className="text-gray-700 font-bold text-lg">Settled up &#10003;</div>
             </div>
           )}
         </div>
@@ -175,7 +175,7 @@ export default function Dashboard() {
             <span className="text-base">⏰</span>
             <div className="flex-1 min-w-0">
               <p className="text-amber-900 text-xs font-semibold leading-relaxed">
-                Overdue · You are owed {formatMoney(staleOwedGroup.my_balance, staleOwedGroup.base_currency)} from{' '}
+                Overdue &middot; You are owed {formatMoney(staleOwedGroup.my_balance, staleOwedGroup.base_currency)} from{' '}
                 <span className="font-bold">{staleOwedGroup.name}</span> for over 24h.
               </p>
             </div>
@@ -203,7 +203,7 @@ export default function Dashboard() {
           </div>
         ) : groups.length === 0 ? (
           <div className="text-center py-16 px-6">
-            <div className="text-6xl mb-4">🍜</div>
+            <div className="text-6xl mb-4">&#127836;</div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">No groups yet</h3>
             <p className="text-gray-500 text-sm mb-6">Create a group for your next trip or dinner</p>
             <button onClick={() => setShowNewGroup(true)} className="w-full py-3.5 bg-sky-500 text-white rounded-2xl font-bold mb-3">
@@ -229,7 +229,7 @@ export default function Dashboard() {
               type="text"
               value={groupName}
               onChange={(event) => setGroupName(event.target.value)}
-              placeholder="Bali Trip 🌴"
+              placeholder="Bali Trip"
               className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
               autoFocus
             />

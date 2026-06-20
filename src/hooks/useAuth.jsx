@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 const AUTH_INIT_TIMEOUT_MS = 15000
 const PROFILE_LOAD_TIMEOUT_MS = 25000
-const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
 function isRecoverableAuthLockError(error) {
   const message = String(error?.message || '').toLowerCase()
@@ -54,20 +53,6 @@ function fallbackName(user) {
   if (fromMeta && fromMeta.trim()) return fromMeta.trim()
   if (user?.email) return user.email.split('@')[0]
   return 'Kaki Split User'
-}
-
-function buildEmailRedirectUrl(pathname = '/login') {
-  const normalizedPath = typeof pathname === 'string' && pathname.startsWith('/') ? pathname : '/login'
-  const configuredBaseUrl = import.meta.env.VITE_AUTH_REDIRECT_BASE_URL || import.meta.env.VITE_APP_URL
-
-  if (!configuredBaseUrl) return null
-
-  try {
-    return new URL(normalizedPath, configuredBaseUrl).toString()
-  } catch (error) {
-    console.warn('Invalid auth redirect base URL. Falling back to Supabase default redirect.', error)
-    return null
-  }
 }
 
 async function ensureProfileRow(user) {
@@ -198,54 +183,6 @@ export function AuthProvider({ children }) {
     }
   }, [loadProfile])
 
-    const signIn = useCallback(async ({ email, password }) => {
-      const { data, error } = await withAuthLockRetry(() => supabase.auth.signInWithPassword({ email, password }))
-      if (error) throw error
-
-      const pendingInviteCode = localStorage.getItem(PENDING_INVITE_KEY)
-      if (pendingInviteCode && data?.user?.id) {
-        localStorage.setItem(PENDING_INVITE_KEY, String(pendingInviteCode).trim().toUpperCase())
-      }
-
-      return data
-    }, [])
-
-
-  const signUp = useCallback(async ({ email, password, name, redirectPath = '/login' }) => {
-    const emailRedirectTo = buildEmailRedirectUrl(redirectPath)
-    const signUpOptions = {
-      data: {
-        display_name: name,
-      },
-    }
-
-    if (emailRedirectTo) {
-      signUpOptions.emailRedirectTo = emailRedirectTo
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: signUpOptions,
-    })
-
-    if (error) throw error
-
-    const identities = Array.isArray(data?.user?.identities) ? data.user.identities : null
-    const isExistingUser = Boolean(data?.user && identities && identities.length === 0)
-    const emailConfirmationSent = Boolean(data?.user?.confirmation_sent_at)
-
-    // Profile row creation is deferred to onAuthStateChange after the user
-    // has a confirmed session. Calling ensureProfileRow here (pre-confirmation)
-    // has no auth JWT and will be blocked by RLS.
-
-    return {
-      ...data,
-      isExistingUser,
-      emailConfirmationSent,
-    }
-  }, [])
-
   const signInWithGoogle = useCallback(async ({ redirectPath = '/dashboard' } = {}) => {
     const normalizedPath = typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/dashboard'
 
@@ -258,25 +195,6 @@ export function AuthProvider({ children }) {
 
     if (error) throw error
     return data
-  }, [])
-
-  const resendSignupConfirmation = useCallback(async ({ email, redirectPath = '/login' }) => {
-    const normalizedEmail = String(email || '').trim()
-    if (!normalizedEmail) throw new Error('Email is required to resend confirmation.')
-
-    const emailRedirectTo = buildEmailRedirectUrl(redirectPath)
-    const resendOptions = {
-      type: 'signup',
-      email: normalizedEmail,
-    }
-
-    if (emailRedirectTo) {
-      resendOptions.options = { emailRedirectTo }
-    }
-
-    const { error } = await supabase.auth.resend(resendOptions)
-
-    if (error) throw error
   }, [])
 
   const signOut = useCallback(async () => {
@@ -296,14 +214,11 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       authError,
-      signIn,
-      signUp,
       signInWithGoogle,
-      resendSignupConfirmation,
       signOut,
       refreshProfile,
     }),
-    [authError, loading, profile, refreshProfile, resendSignupConfirmation, session, signIn, signInWithGoogle, signOut, signUp, user]
+    [authError, loading, profile, refreshProfile, session, signInWithGoogle, signOut, user]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

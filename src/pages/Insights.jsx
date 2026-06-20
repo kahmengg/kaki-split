@@ -103,13 +103,13 @@ export default function Insights() {
             <div>
               <p className="text-sky-100 text-xs">Most active day</p>
               <p className="text-white font-bold text-sm">
-                {data.mostActiveDay ? new Date(data.mostActiveDay).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }) : '—'}
+                {data.mostActiveDay ? new Date(data.mostActiveDay).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }) : '-'}
               </p>
             </div>
             <div className="w-px bg-white/20" />
             <div>
               <p className="text-sky-100 text-xs">Top expense</p>
-              <p className="text-white font-bold text-sm">{data.topExpense?.description || '—'}</p>
+              <p className="text-white font-bold text-sm">{data.topExpense?.description || '-'}</p>
             </div>
           </div>
         </div>

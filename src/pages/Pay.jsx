@@ -8,7 +8,7 @@ import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
 import { recordPayment } from '../lib/kakiSplitApi'
 import { formatMoney } from '../lib/format'
-import { buildPayNowPayload, buildPayLahDeepLink, normalizePayNowProxy } from '../lib/paynow'
+import { buildPayNowPayload, normalizePayNowProxy } from '../lib/paynow'
 
 function InlineToast({ message, visible }) {
   return (
@@ -21,13 +21,13 @@ function InlineToast({ message, visible }) {
         ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3'}
       `}
     >
-      <span className="text-sky-400 text-base">✓</span>
+      <span className="text-sky-400 text-base">&#10003;</span>
       <span className="text-sm font-semibold">{message}</span>
     </div>
   )
 }
 
-function PayNowQR({ phone, amount }) {
+function PayNowQR({ phone, amount, onActivate }) {
   const payload = useMemo(
     () => buildPayNowPayload({ proxy: phone, amount, editable: false }),
     [phone, amount]
@@ -37,7 +37,12 @@ function PayNowQR({ phone, amount }) {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="bg-white p-4 rounded-2xl border-2 border-gray-200 shadow-sm">
+      <button
+        type="button"
+        onClick={onActivate}
+        className="bg-white p-4 rounded-2xl border-2 border-gray-200 shadow-sm active:scale-[0.98] transition-transform"
+        aria-label="Copy PayNow number"
+      >
         <QRCodeSVG
           value={payload}
           size={130}
@@ -45,8 +50,9 @@ function PayNowQR({ phone, amount }) {
           fgColor="#111827"
           level="M"
         />
-      </div>
+      </button>
       <p className="text-xs text-gray-500 mt-2 text-center">Scan with any Singapore banking app</p>
+      <p className="text-xs text-gray-400 mt-0.5 text-center">Tap QR to copy PayNow number</p>
       <p className="text-xs text-gray-400 mt-0.5 font-medium">{normalizePayNowProxy(phone)}</p>
     </div>
   )
@@ -94,20 +100,16 @@ export default function PayScreen() {
     window.setTimeout(() => setToastVisible(false), 3200)
   }
 
-  const handlePayNowAndPayLah = () => {
+  const handleCopyPayNow = () => {
     const payNowNumber = toUser?.paynow_number
-    if (payNowNumber) {
-      navigator.clipboard?.writeText(normalizePayNowProxy(payNowNumber) || payNowNumber).catch(() => {})
+    if (!payNowNumber) {
+      showInlineToast('No PayNow number is saved for this person.')
+      return
     }
-    showInlineToast('PayNow number copied! Opening PayLah...')
-    window.setTimeout(() => {
-      const deepLink = buildPayLahDeepLink({
-        proxy: payNowNumber,
-        amount: payAmount,
-        name: toUser?.display_name,
-      })
-      window.location.href = deepLink
-    }, 300)
+
+    // Copying is the most reliable cross-bank fallback from mobile web and app wrappers.
+    navigator.clipboard?.writeText(normalizePayNowProxy(payNowNumber) || payNowNumber).catch(() => {})
+    showInlineToast('PayNow number copied.')
   }
 
   const handleMarkPaid = async () => {
@@ -160,10 +162,10 @@ export default function PayScreen() {
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
         <div className="text-center">
           <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-4xl">✅</span>
+            <span className="text-4xl">&#9989;</span>
           </div>
           <h2 className="text-2xl font-black text-gray-900 mb-2">Paid!</h2>
-          <p className="text-gray-500">Redirecting back…</p>
+          <p className="text-gray-500">Redirecting back...</p>
         </div>
       </div>
     )
@@ -211,7 +213,7 @@ export default function PayScreen() {
           </div>
 
           <button onClick={() => setShowPartial((value) => !value)} className="w-full text-center text-sm text-sky-600 font-medium">
-            {showPartial ? '← Pay full amount' : 'Pay partial amount'}
+            {showPartial ? '\u2190 Pay full amount' : 'Pay partial amount'}
           </button>
 
           {showPartial && (
@@ -236,32 +238,31 @@ export default function PayScreen() {
                 <p className="text-gray-500 text-sm mt-0.5">{formatMoney(payAmount)} via PayNow</p>
               </div>
               <div className="flex items-center gap-1.5 bg-red-50 border border-red-100 rounded-xl px-2.5 py-1">
-                <span className="text-sm">📱</span>
+                <span className="text-sm">&#128241;</span>
                 <span className="text-xs font-bold text-red-600">PayNow</span>
               </div>
             </div>
 
             <div className="flex justify-center mb-5">
-              <PayNowQR phone={toUser.paynow_number} amount={payAmount} />
+              <PayNowQR phone={toUser.paynow_number} amount={payAmount} onActivate={handleCopyPayNow} />
             </div>
 
             <button
-              onClick={handlePayNowAndPayLah}
+              onClick={handleCopyPayNow}
               className="w-full py-4 bg-sky-500 text-white rounded-full font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
               style={{ boxShadow: '0 4px 16px rgba(14,165,233,0.35)' }}
             >
-              <span>📋</span>
-              Copy PayNow &amp; Open PayLah!
+              <span>&#128203;</span>
+              Copy PayNow number
             </button>
-              <p className="text-center text-xs text-gray-400 mt-2">Copies {normalizePayNowProxy(toUser.paynow_number)} · opens PayLah with {formatMoney(payAmount)} pre-filled</p>
           </div>
         )}
 
         <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
           <p className="text-sm font-semibold text-gray-700 mb-1">Already paid outside the app?</p>
-          <p className="text-xs text-gray-400 mb-3">Mark as paid to update everyone's balance.</p>
+          <p className="text-xs text-gray-400 mb-3">This records the payment in Kaki Split. It does not verify the bank transfer.</p>
           <button onClick={() => setShowConfirm(true)} className="w-full py-3.5 bg-gray-900 text-white rounded-full font-bold text-sm active:bg-gray-700 transition-colors">
-            Mark {formatMoney(payAmount)} as paid ✓
+            Mark {formatMoney(payAmount)} as paid &#10003;
           </button>
         </div>
       </div>
