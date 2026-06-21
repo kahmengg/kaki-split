@@ -6,6 +6,7 @@ import BottomNav from '../components/BottomNav'
 import { useToast } from '../components/Toast'
 import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
+import { useGroupRealtime } from '../hooks/useRealtimeRefresh'
 import { recordPayment } from '../lib/kakiSplitApi'
 import { formatMoney } from '../lib/format'
 import { buildPayNowPayload, normalizePayNowProxy } from '../lib/paynow'
@@ -68,6 +69,7 @@ export default function PayScreen() {
   const { user } = useAuth()
   const { invalidateGroup } = useAppQueryInvalidation()
   const groupQuery = useGroupData({ groupId: id, userId: user?.id })
+  useGroupRealtime({ groupId: id, userId: user?.id })
 
   const fromId = searchParams.get('from') || user?.id
   const toId = searchParams.get('to')

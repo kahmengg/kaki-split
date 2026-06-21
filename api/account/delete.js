@@ -29,7 +29,8 @@ export default async function handler(req, res) {
   }
 
   // Preserve group expense history while removing personal profile/payment data.
-  // A hard profile delete would break foreign-key references from historical rows.
+  // The auth user is deleted after this, but this anonymous profile row remains
+  // as a tombstone for historical expenses, payments, and group ownership.
   const { data: updatedProfile, error: updateError } = await adminSupabase
     .from('profiles')
     .update({
@@ -55,5 +56,16 @@ export default async function handler(req, res) {
     return
   }
 
-  res.status(200).json({ ok: true })
+  const { error: deleteUserError } = await adminSupabase.auth.admin.deleteUser(user.id)
+
+  if (deleteUserError) {
+    res.status(409).json({
+      error:
+        'Profile data was anonymized, but the auth account could not be deleted. Run the Supabase profile/auth decoupling migration and try again.',
+      details: deleteUserError.message,
+    })
+    return
+  }
+
+  res.status(200).json({ ok: true, authDeleted: true })
 }

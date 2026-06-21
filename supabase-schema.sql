@@ -1,7 +1,7 @@
 create extension if not exists pgcrypto;
 
 create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key,
   display_name text,
   email text,
   avatar_url text,
@@ -11,6 +11,11 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Keep profile rows after auth account deletion so historical group expenses,
+-- payments, and balances can still point at an anonymous "Deleted user" record.
+alter table public.profiles
+drop constraint if exists profiles_id_fkey;
 
 create table if not exists public.groups (
   id uuid primary key default gen_random_uuid(),

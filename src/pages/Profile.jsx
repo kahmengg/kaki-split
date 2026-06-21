@@ -311,8 +311,8 @@ export default function Profile() {
                 </svg>
               </div>
               <div>
-                <span className="block text-red-500 font-semibold text-sm">Delete account data</span>
-                <span className="block text-xs text-gray-400 mt-0.5">Remove profile and payment details from Kaki Split.</span>
+                <span className="block text-red-500 font-semibold text-sm">Delete account</span>
+                <span className="block text-xs text-gray-400 mt-0.5">Remove login, profile, and payment details.</span>
               </div>
             </button>
           </div>
@@ -321,13 +321,13 @@ export default function Profile() {
         <p className="text-center text-xs text-gray-300 pb-2">Kaki Split v1.0</p>
       </div>
 
-      <BottomSheet isOpen={showDeleteAccount} onClose={() => (!deletingAccount ? setShowDeleteAccount(false) : null)} title="Delete account data">
+      <BottomSheet isOpen={showDeleteAccount} onClose={() => (!deletingAccount ? setShowDeleteAccount(false) : null)} title="Delete account">
         <div className="px-5 py-5 space-y-4">
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
-            <p className="text-sm font-bold text-red-700">This removes your personal details.</p>
+            <p className="text-sm font-bold text-red-700">This deletes your login and personal details.</p>
             <p className="mt-1 text-sm text-red-600">
-              Your display name, email, profile photo, and PayNow number will be removed. Existing group expenses stay in group history as
-              "Deleted user" so other members' balances are not broken.
+              Your Google login, display name, email, profile photo, and PayNow number will be removed. Existing group expenses stay in group
+              history as "Deleted user" so other members' balances are not broken.
             </p>
           </div>
           <button
@@ -335,7 +335,7 @@ export default function Profile() {
             disabled={deletingAccount}
             className="w-full rounded-full bg-red-500 py-4 text-sm font-bold text-white disabled:opacity-60"
           >
-            {deletingAccount ? 'Deleting...' : 'Delete my account data'}
+            {deletingAccount ? 'Deleting...' : 'Delete my account'}
           </button>
           <button
             onClick={() => setShowDeleteAccount(false)}

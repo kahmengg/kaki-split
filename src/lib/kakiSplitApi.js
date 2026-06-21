@@ -1029,7 +1029,8 @@ export async function deleteAccountData() {
 
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error(payload?.error || 'Unable to delete account data')
+    const detail = payload?.details ? ` ${payload.details}` : ''
+    throw new Error(`${payload?.error || 'Unable to delete account data'}${detail}`)
   }
 
   clearReadCaches()

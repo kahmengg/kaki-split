@@ -7,6 +7,7 @@ import ThemeToggle from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAppQueryInvalidation, useDashboardData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
+import { useDashboardRealtime } from '../hooks/useRealtimeRefresh'
 import { createGroup } from '../lib/kakiSplitApi'
 import { formatMoney, timeAgo } from '../lib/format'
 
@@ -28,7 +29,7 @@ function GroupCard({ group, usersById, onClick }) {
             <span className="text-gray-400 text-sm font-medium">Settled &#10003;</span>
           ) : balance < 0 ? (
             <div>
-              <div className="text-red-500 font-bold text-sm">−{formatMoney(Math.abs(balance), group.base_currency)}</div>
+              <div className="text-red-500 font-bold text-sm">-{formatMoney(Math.abs(balance), group.base_currency)}</div>
               <div className="text-red-400 text-xs">you owe</div>
             </div>
           ) : (
@@ -78,6 +79,7 @@ export default function Dashboard() {
   const groups = dashboardQuery.data?.groups || []
   const usersById = dashboardQuery.data?.usersById || {}
   const loading = dashboardQuery.isLoading
+  useDashboardRealtime({ userId: user?.id, groups })
 
   const totalOwed = useMemo(() => groups.reduce((sum, group) => (group.my_balance > 0 ? sum + group.my_balance : sum), 0), [groups])
   const totalOwe = useMemo(() => groups.reduce((sum, group) => (group.my_balance < 0 ? sum + Math.abs(group.my_balance) : sum), 0), [groups])

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kaki Split</string>
+    <string name="title_activity_main">Kaki Split</string>
+    <string name="package_name">com.kahme.kakisplit</string>
+    <string name="custom_url_scheme">com.kahme.kakisplit</string>
+</resources>

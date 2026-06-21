@@ -8,6 +8,7 @@ import QuickSplit from './QuickSplit'
 import { useToast } from '../components/Toast'
 import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
+import { useGroupRealtime } from '../hooks/useRealtimeRefresh'
 import {
   addExpense,
   createTelegramLinkToken,
@@ -326,6 +327,7 @@ export default function GroupHome() {
   const { user } = useAuth()
   const { invalidateGroup } = useAppQueryInvalidation()
   const groupQuery = useGroupData({ groupId: id, userId: user?.id })
+  useGroupRealtime({ groupId: id, userId: user?.id })
 
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])

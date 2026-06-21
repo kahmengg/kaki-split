@@ -208,11 +208,11 @@ export function AuthProvider({ children }) {
     }
   }, [loadProfile])
 
-  const signInWithGoogle = useCallback(async ({ redirectPath = '/dashboard' } = {}) => {
+  const signInWithProvider = useCallback(async (provider, { redirectPath = '/dashboard' } = {}) => {
     const normalizedPath = typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/dashboard'
 
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: {
         redirectTo: `${window.location.origin}${normalizedPath}`,
       },
@@ -221,6 +221,10 @@ export function AuthProvider({ children }) {
     if (error) throw error
     return data
   }, [])
+
+  const signInWithGoogle = useCallback((options) => signInWithProvider('google', options), [signInWithProvider])
+
+  const signInWithApple = useCallback((options) => signInWithProvider('apple', options), [signInWithProvider])
 
   const signOut = useCallback(async () => {
     const { error } = await withAuthLockRetry(() => supabase.auth.signOut())
@@ -239,11 +243,12 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       authError,
+      signInWithApple,
       signInWithGoogle,
       signOut,
       refreshProfile,
     }),
-    [authError, loading, profile, refreshProfile, session, signInWithGoogle, signOut, user]
+    [authError, loading, profile, refreshProfile, session, signInWithApple, signInWithGoogle, signOut, user]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

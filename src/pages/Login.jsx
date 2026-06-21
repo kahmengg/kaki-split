@@ -15,9 +15,9 @@ const valuePoints = [
 export default function Login() {
   const location = useLocation()
   const showToast = useToast()
-  const { signInWithGoogle } = useAuth()
+  const { signInWithApple, signInWithGoogle } = useAuth()
   const { isDark } = useTheme()
-  const [loading, setLoading] = useState(false)
+  const [loadingProvider, setLoadingProvider] = useState('')
 
   const pendingInviteCode = useMemo(() => {
     const fromQuery = new URLSearchParams(location.search).get('invite')
@@ -33,21 +33,31 @@ export default function Login() {
   }, [pendingInviteCode])
 
   const handleGoogle = async () => {
-    setLoading(true)
+    setLoadingProvider('google')
     try {
-      // Keep login Google-only so users do not have to choose an auth method.
+      // Preserve invite redirects no matter which OAuth provider the user picks.
       await signInWithGoogle({ redirectPath: postAuthPath })
     } catch (error) {
       showToast(error.message || 'Google sign-in failed. Please try again.', 'error')
-      setLoading(false)
+      setLoadingProvider('')
+    }
+  }
+
+  const handleApple = async () => {
+    setLoadingProvider('apple')
+    try {
+      await signInWithApple({ redirectPath: postAuthPath })
+    } catch (error) {
+      showToast(error.message || 'Apple sign-in failed. Please check Supabase Apple provider setup.', 'error')
+      setLoadingProvider('')
     }
   }
 
   useEffect(() => {
-    if (!loading) return
+    if (!loadingProvider) return
 
-    const timeoutId = window.setTimeout(() => setLoading(false), 8000)
-    const handleFocus = () => setLoading(false)
+    const timeoutId = window.setTimeout(() => setLoadingProvider(''), 8000)
+    const handleFocus = () => setLoadingProvider('')
 
     window.addEventListener('focus', handleFocus)
 
@@ -55,15 +65,19 @@ export default function Login() {
       window.clearTimeout(timeoutId)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [loading])
+  }, [loadingProvider])
+
+  const isLoading = Boolean(loadingProvider)
 
   return (
     <div className={`min-h-screen transition-colors ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-sky-50 text-slate-950'}`}>
-      {loading && (
+      {isLoading && (
         <div className={`fixed inset-0 z-30 flex items-center justify-center px-6 backdrop-blur-sm ${isDark ? 'bg-slate-950/75' : 'bg-white/75'}`}>
           <div className={`w-full max-w-xs rounded-3xl px-6 py-5 text-center shadow-xl ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
             <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-sky-200 border-t-sky-500" />
-            <p className={`mt-3 text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Opening Google sign-in...</p>
+            <p className={`mt-3 text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+              Opening {loadingProvider === 'apple' ? 'Apple' : 'Google'} sign-in...
+            </p>
             <p className={`mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>You'll be redirected in a moment.</p>
           </div>
         </div>
@@ -115,15 +129,41 @@ export default function Login() {
 
           <section className="pt-8">
             <button
+              onClick={handleApple}
+              disabled={isLoading}
+              className={`mb-3 flex w-full items-center justify-center gap-3 rounded-2xl py-4 text-sm font-black shadow-[0_18px_36px_rgba(15,23,42,0.12)] transition-transform active:scale-[0.99] disabled:opacity-60 ${
+                isDark
+                  ? 'bg-white text-slate-950'
+                  : 'bg-slate-950 text-white'
+              }`}
+            >
+              {loadingProvider === 'apple' ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
+                  </svg>
+                  Redirecting to Apple...
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M16.365 1.43c0 1.14-.418 2.13-1.252 2.968-.893.89-1.862 1.402-2.91 1.333-.134-1.09.39-2.248 1.164-3.023.853-.857 2.226-1.474 2.998-1.278ZM20.5 17.23c-.543 1.253-.805 1.814-1.503 2.922-.975 1.544-2.347 3.47-4.05 3.485-1.514.014-1.904-1.008-3.959-.997-2.054.011-2.482 1.014-3.996 1-1.704-.016-3.006-1.752-3.98-3.296-2.721-4.312-3.008-9.372-1.328-12.062 1.193-1.909 3.077-3.028 4.848-3.028 1.804 0 2.938 1.005 4.43 1.005 1.448 0 2.33-1.008 4.418-1.008 1.578 0 3.25.873 4.438 2.38-3.9 2.171-3.267 7.83.682 9.599Z" />
+                  </svg>
+                  Continue with Apple
+                </>
+              )}
+            </button>
+
+            <button
               onClick={handleGoogle}
-              disabled={loading}
+              disabled={isLoading}
               className={`flex w-full items-center justify-center gap-3 rounded-2xl py-4 text-sm font-black shadow-[0_18px_36px_rgba(14,165,233,0.16)] transition-transform active:scale-[0.99] disabled:opacity-60 ${
                 isDark
                   ? 'bg-white/10 text-white ring-1 ring-sky-400/30'
                   : 'bg-white/85 text-slate-900 ring-1 ring-sky-200'
               }`}
             >
-              {loading ? (
+              {loadingProvider === 'google' ? (
                 <>
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />

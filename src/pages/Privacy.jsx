@@ -23,8 +23,8 @@ export default function Privacy() {
 
         <h2 className="text-lg font-bold text-gray-900 mt-6">Your choices</h2>
         <p className="text-sm text-gray-600 mt-2">
-          You can update profile information in-app. You can also delete your account data from Profile, which removes
-          personal profile and payment details while preserving shared group history needed by other members.
+          You can update profile information in-app. You can also delete your account from Profile, which removes your
+          login, personal profile, and payment details while preserving anonymized shared group history needed by other members.
         </p>
 
         <div className="mt-8">
