@@ -123,6 +123,58 @@ Install dependencies:
 bun install
 ```
 
+Run the web app:
+
+```bash
+bun run dev
+```
+
+## Android Development
+
+The Android app is powered by Capacitor. The package id is:
+
+```text
+com.kahme.kakisplit
+```
+
+Build and sync the web app into Android:
+
+```bash
+bun run android:sync
+```
+
+Open the native project in Android Studio:
+
+```bash
+bun run android:open
+```
+
+Build a debug APK:
+
+```bash
+bun run android:build:debug
+```
+
+For Google OAuth in the Android app, add this URL to Supabase Auth's allowed redirect URLs:
+
+```text
+com.kahme.kakisplit://auth/callback
+```
+
+In Google Cloud Console, keep the OAuth redirect URI as the Supabase callback URL shown in Supabase Auth provider settings.
+
+Before publishing to Google Play, create a signed Android App Bundle from Android Studio:
+
+```text
+Build > Generate Signed App Bundle / APK > Android App Bundle
+```
+
+Do not commit release keystores or passwords.
+
+```bash
+bun install
+```
+
 Start the dev server:
 
 ```bash

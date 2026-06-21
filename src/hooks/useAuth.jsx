@@ -1,9 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { App as CapacitorApp } from '@capacitor/app'
+import { Browser } from '@capacitor/browser'
+import { Capacitor } from '@capacitor/core'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const AUTH_INIT_TIMEOUT_MS = 15000
 const PROFILE_LOAD_TIMEOUT_MS = 25000
+const NATIVE_AUTH_CALLBACK_URL = 'com.kahme.kakisplit://auth/callback'
+const POST_AUTH_REDIRECT_KEY = 'kakisplit:postAuthRedirectPath'
 
 function isRecoverableAuthLockError(error) {
   const message = String(error?.message || '').toLowerCase()
@@ -208,23 +213,83 @@ export function AuthProvider({ children }) {
     }
   }, [loadProfile])
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined
+
+    let listenerHandle = null
+    let cancelled = false
+
+    const attachListener = async () => {
+      listenerHandle = await CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
+        if (!url?.startsWith(NATIVE_AUTH_CALLBACK_URL)) return
+
+        try {
+          await Browser.close()
+        } catch {
+          // Browser may already be closed on some Android versions.
+        }
+
+        const parsedUrl = new URL(url)
+        const authCode = parsedUrl.searchParams.get('code')
+        if (!authCode) return
+
+        const { data, error } = await supabase.auth.exchangeCodeForSession(authCode)
+        if (error) {
+          setAuthError(error.message || 'Unable to finish Google sign-in.')
+          return
+        }
+
+        const nextUser = data.session?.user
+        if (nextUser) {
+          setSession(data.session)
+          setUser(nextUser)
+          await loadProfile(nextUser, { softTimeout: true })
+        }
+
+        const redirectPath = localStorage.getItem(POST_AUTH_REDIRECT_KEY) || '/dashboard'
+        localStorage.removeItem(POST_AUTH_REDIRECT_KEY)
+        window.history.replaceState({}, '', redirectPath)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+    }
+
+    attachListener().catch((error) => {
+      if (!cancelled) setAuthError(error.message || 'Unable to prepare mobile sign-in.')
+    })
+
+    return () => {
+      cancelled = true
+      listenerHandle?.remove()
+    }
+  }, [loadProfile])
+
   const signInWithProvider = useCallback(async (provider, { redirectPath = '/dashboard' } = {}) => {
     const normalizedPath = typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/dashboard'
+    const isNative = Capacitor.isNativePlatform()
+    const redirectTo = isNative ? NATIVE_AUTH_CALLBACK_URL : `${window.location.origin}${normalizedPath}`
+
+    if (isNative) {
+      localStorage.setItem(POST_AUTH_REDIRECT_KEY, normalizedPath)
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}${normalizedPath}`,
+        redirectTo,
+        skipBrowserRedirect: isNative,
       },
     })
 
     if (error) throw error
+
+    if (isNative && data?.url) {
+      await Browser.open({ url: data.url, windowName: '_self' })
+    }
+
     return data
   }, [])
 
   const signInWithGoogle = useCallback((options) => signInWithProvider('google', options), [signInWithProvider])
-
-  const signInWithApple = useCallback((options) => signInWithProvider('apple', options), [signInWithProvider])
 
   const signOut = useCallback(async () => {
     const { error } = await withAuthLockRetry(() => supabase.auth.signOut())
@@ -243,12 +308,11 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       authError,
-      signInWithApple,
       signInWithGoogle,
       signOut,
       refreshProfile,
     }),
-    [authError, loading, profile, refreshProfile, session, signInWithApple, signInWithGoogle, signOut, user]
+    [authError, loading, profile, refreshProfile, session, signInWithGoogle, signOut, user]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
