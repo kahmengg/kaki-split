@@ -55,6 +55,10 @@ function fallbackName(user) {
   return 'Kaki Split User'
 }
 
+function shouldRestoreDeletedProfile(profile) {
+  return profile?.display_name === 'Deleted user' && !profile?.email
+}
+
 async function ensureProfileRow(user) {
   if (!user?.id) return null
 
@@ -66,7 +70,28 @@ async function ensureProfileRow(user) {
 
   if (fetchError) throw fetchError
 
-  if (data) return data
+  if (data) {
+    if (!shouldRestoreDeletedProfile(data)) return data
+
+    // If someone signs back in after deleting account data, rebuild the basic
+    // profile from their current Google account instead of keeping "Deleted user".
+    const restoredProfile = {
+      display_name: fallbackName(user),
+      email: user.email || null,
+      avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from('profiles')
+      .update(restoredProfile)
+      .eq('id', user.id)
+      .select('*')
+      .maybeSingle()
+
+    if (updateError) throw updateError
+    return updated || { ...data, ...restoredProfile }
+  }
 
   // Avoid client-side inserts here: profile creation should be handled by the
   // auth trigger (handle_new_auth_user). Returning a fallback object prevents

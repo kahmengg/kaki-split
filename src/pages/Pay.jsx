@@ -52,8 +52,10 @@ function PayNowQR({ phone, amount, onActivate }) {
         />
       </button>
       <p className="text-xs text-gray-500 mt-2 text-center">Scan with any Singapore banking app</p>
-      <p className="text-xs text-gray-400 mt-0.5 text-center">Tap QR to copy PayNow number</p>
-      <p className="text-xs text-gray-400 mt-0.5 font-medium">{normalizePayNowProxy(phone)}</p>
+      <p className="text-xs text-gray-400 mt-0.5 text-center">Tap QR to copy PayNow details</p>
+      <button type="button" onClick={onActivate} className="mt-1 text-xs font-bold text-sky-600 underline underline-offset-2">
+        {normalizePayNowProxy(phone)}
+      </button>
     </div>
   )
 }
@@ -100,16 +102,31 @@ export default function PayScreen() {
     window.setTimeout(() => setToastVisible(false), 3200)
   }
 
-  const handleCopyPayNow = () => {
+  const handleCopyPayNow = async () => {
     const payNowNumber = toUser?.paynow_number
     if (!payNowNumber) {
       showInlineToast('No PayNow number is saved for this person.')
       return
     }
 
-    // Copying is the most reliable cross-bank fallback from mobile web and app wrappers.
-    navigator.clipboard?.writeText(normalizePayNowProxy(payNowNumber) || payNowNumber).catch(() => {})
-    showInlineToast('PayNow number copied.')
+    const normalized = normalizePayNowProxy(payNowNumber) || payNowNumber
+    const details = `Pay ${toUser?.display_name || 'this person'} ${formatMoney(payAmount)} by PayNow: ${normalized}`
+
+    // Mobile browsers cannot choose a user's default bank app directly, so use
+    // the native share sheet when available and keep copy as the reliable fallback.
+    navigator.clipboard?.writeText(details).catch(() => {})
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'PayNow details', text: details })
+        showInlineToast('PayNow details shared.')
+        return
+      } catch {
+        // User may cancel the share sheet; the details are still copied.
+      }
+    }
+
+    showInlineToast('PayNow details copied.')
   }
 
   const handleMarkPaid = async () => {
@@ -253,7 +270,7 @@ export default function PayScreen() {
               style={{ boxShadow: '0 4px 16px rgba(14,165,233,0.35)' }}
             >
               <span>&#128203;</span>
-              Copy PayNow number
+              Share / copy PayNow details
             </button>
           </div>
         )}
@@ -269,8 +286,8 @@ export default function PayScreen() {
 
       {showConfirm && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-[2px]" style={{ maxWidth: '430px', left: '50%', transform: 'translateX(-50%)' }} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ maxWidth: '430px', left: '50%', transform: 'translateX(-50%)' }}>
+          <div className="fixed inset-y-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 bg-black/40 backdrop-blur-[2px]" />
+          <div className="fixed inset-y-0 left-1/2 z-50 flex w-full max-w-[430px] -translate-x-1/2 items-center justify-center px-6">
             <div className="bg-white rounded-3xl p-6 w-full shadow-2xl">
               <h3 className="text-lg font-black text-gray-900 mb-2">Confirm payment</h3>
               <p className="text-gray-500 text-sm mb-5">Mark {formatMoney(payAmount)} as paid? This will update balances for everyone in the group.</p>

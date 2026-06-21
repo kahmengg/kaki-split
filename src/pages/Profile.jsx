@@ -217,6 +217,13 @@ export default function Profile() {
               </div>
               <p className="text-xs text-gray-400 mt-1 ml-1">Email cannot be changed</p>
             </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-400 block mb-1.5">Sign-in method</label>
+              <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-700">Google</p>
+                <span className="text-xs font-bold text-sky-600">Connected</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -256,6 +263,26 @@ export default function Profile() {
         >
           {saving ? 'Saving...' : 'Save changes'}
         </button>
+
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+            <div className="px-4 pt-4 pb-2">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">App</p>
+            </div>
+            <button
+              onClick={() => navigate('/privacy')}
+              className="w-full px-4 py-3.5 flex items-center justify-between text-left"
+            >
+              <span className="text-sm font-semibold text-gray-700">Privacy Policy</span>
+              <span className="text-gray-300">&#8250;</span>
+            </button>
+            <button
+              onClick={() => navigate('/terms')}
+              className="w-full px-4 py-3.5 flex items-center justify-between text-left border-t border-gray-50"
+            >
+              <span className="text-sm font-semibold text-gray-700">Terms of Service</span>
+              <span className="text-gray-300">&#8250;</span>
+            </button>
+          </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
             <button

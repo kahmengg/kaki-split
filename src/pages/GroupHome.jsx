@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth'
 import {
   addExpense,
   createTelegramLinkToken,
+  deleteGroup,
   deleteGroupActivityItem,
   disconnectTelegramConnection,
   fetchDeletedActivityLogs,
@@ -344,6 +345,8 @@ export default function GroupHome() {
   const [showReminderBanner, setShowReminderBanner] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deletingActivityItem, setDeletingActivityItem] = useState(false)
+  const [showDeleteGroupSheet, setShowDeleteGroupSheet] = useState(false)
+  const [deletingGroup, setDeletingGroup] = useState(false)
   const [groupNameDraft, setGroupNameDraft] = useState('')
   const [savingGroupName, setSavingGroupName] = useState(false)
   const addExpenseInFlightRef = useRef(false)
@@ -704,6 +707,24 @@ export default function GroupHome() {
     }
   }
 
+  const handleConfirmDeleteGroup = async () => {
+    if (!group?.id || !user?.id || deletingGroup) return
+
+    setDeletingGroup(true)
+    try {
+      await deleteGroup({ groupId: group.id, userId: user.id })
+      if (localStorage.getItem('kakisplit:lastGroupId') === group.id) {
+        localStorage.removeItem('kakisplit:lastGroupId')
+      }
+      showToast('Group deleted', 'success')
+      setShowDeleteGroupSheet(false)
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      showToast(error.message || 'Unable to delete group', 'error')
+      setDeletingGroup(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-4 border-b border-gray-100">
@@ -910,6 +931,19 @@ export default function GroupHome() {
             <span className="text-xl w-8 text-center">&#128172;</span>
             <span className="font-semibold text-gray-800 text-sm">{telegramConnected ? '\u2713 Telegram Connected' : 'Connect Telegram'}</span>
           </button>
+
+          {isOwner && (
+            <button
+              onClick={() => {
+                setShowMenu(false)
+                setShowDeleteGroupSheet(true)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-red-50 text-left"
+            >
+              <span className="text-xl w-8 text-center">&#128465;</span>
+              <span className="font-semibold text-red-500 text-sm">Delete group</span>
+            </button>
+          )}
         </div>
       </BottomSheet>
         <BottomSheet isOpen={showEditGroupNameSheet} onClose={() => setShowEditGroupNameSheet(false)} title="Edit group name">
@@ -938,6 +972,33 @@ export default function GroupHome() {
                 className="flex-1 py-3 rounded-full bg-sky-500 text-white font-bold text-sm disabled:opacity-60"
               >
                 {savingGroupName ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
+
+        <BottomSheet isOpen={showDeleteGroupSheet} onClose={() => (!deletingGroup ? setShowDeleteGroupSheet(false) : null)} title="Delete group">
+          <div className="px-5 py-4 pb-8 space-y-4">
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+              <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">Permanent action</p>
+              <p className="text-sm text-red-700">
+                Delete {group.name}? This removes the group, expenses, payments, deleted logs, and Telegram connection for everyone.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowDeleteGroupSheet(false)}
+                disabled={deletingGroup}
+                className="flex-1 py-3 rounded-full border border-gray-200 text-gray-700 font-semibold text-sm disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteGroup}
+                disabled={deletingGroup}
+                className="flex-1 py-3 rounded-full bg-red-500 text-white font-bold text-sm disabled:opacity-60"
+              >
+                {deletingGroup ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

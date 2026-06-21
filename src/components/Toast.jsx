@@ -15,13 +15,13 @@ export default function Toast({ message, type = 'success', onClose }) {
   const colors = {
     success: 'bg-gray-900 text-white',
     error: 'bg-red-500 text-white',
-    info: 'bg-sky-500 text-white',
+    info: 'i',
   }
 
   const icons = {
     success: '\u2713',
     error: '\u00d7',
-    info: 'ℹ',
+    info: 'i',
   }
 
   return (
