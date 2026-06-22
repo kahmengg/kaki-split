@@ -1,5 +1,3 @@
-const ERROR_LOG_ENDPOINT = '/api/client-errors'
-
 function serializeError(error) {
   if (!error) return { message: 'Unknown error' }
 
@@ -11,11 +9,7 @@ function serializeError(error) {
 }
 
 export function logClientError(error, context = {}) {
-  if (import.meta.env.DEV) {
-    console.error('[client-error]', error, context)
-  }
-
-  const body = JSON.stringify({
+  const payload = {
     error: serializeError(error),
     context: {
       source: context.source || 'unknown',
@@ -24,18 +18,9 @@ export function logClientError(error, context = {}) {
       userAgent: window.navigator.userAgent,
       timestamp: new Date().toISOString(),
     },
-  })
-
-  if (navigator.sendBeacon) {
-    const blob = new Blob([body], { type: 'application/json' })
-    navigator.sendBeacon(ERROR_LOG_ENDPOINT, blob)
-    return
   }
 
-  fetch(ERROR_LOG_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-    keepalive: true,
-  }).catch(() => {})
+  // Keep this local on Vercel Hobby to avoid adding another Serverless Function.
+  // Swap this for Sentry or another hosted logger before a larger public launch.
+  console.error('[client-error]', payload)
 }
