@@ -159,6 +159,21 @@ create table if not exists public.telegram_outbox (
   constraint telegram_outbox_status_check check (status in ('pending', 'sent', 'failed'))
 );
 
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'expenses_amount_positive_check') then
+    alter table public.expenses add constraint expenses_amount_positive_check check (amount > 0);
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'expense_splits_amount_nonnegative_check') then
+    alter table public.expense_splits add constraint expense_splits_amount_nonnegative_check check (amount >= 0);
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'payments_amount_positive_check') then
+    alter table public.payments add constraint payments_amount_positive_check check (amount > 0);
+  end if;
+end $$;
+
 create index if not exists idx_group_members_user_id on public.group_members(user_id);
 create index if not exists idx_expenses_group_id on public.expenses(group_id);
 create index if not exists idx_expenses_created_at on public.expenses(created_at desc);
@@ -370,6 +385,7 @@ to authenticated
 with check (
   created_by = auth.uid()
   and public.is_group_member(group_id, auth.uid())
+  and public.is_group_member(group_id, paid_by)
 );
 
 drop policy if exists "expenses_update_creator" on public.expenses;
@@ -412,6 +428,7 @@ with check (
     from public.expenses e
     where e.id = expense_splits.expense_id
       and e.created_by = auth.uid()
+      and public.is_group_member(e.group_id, expense_splits.user_id)
   )
 );
 
@@ -433,6 +450,7 @@ with check (
     from public.expenses e
     where e.id = expense_splits.expense_id
       and e.created_by = auth.uid()
+      and public.is_group_member(e.group_id, expense_splits.user_id)
   )
 );
 
@@ -462,6 +480,8 @@ to authenticated
 with check (
   created_by = auth.uid()
   and public.is_group_member(group_id, auth.uid())
+  and public.is_group_member(group_id, from_user_id)
+  and public.is_group_member(group_id, to_user_id)
 );
 
 drop policy if exists "payments_update_creator" on public.payments;
@@ -494,6 +514,7 @@ to authenticated
 with check (
   from_user_id = auth.uid()
   and public.is_group_member(group_id, auth.uid())
+  and public.is_group_member(group_id, to_user_id)
 );
 
 drop policy if exists "nudges_delete_sender_or_group_owner" on public.nudges;

@@ -108,6 +108,7 @@ Notes:
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are required by serverless routes that perform privileged Supabase operations.
 - `APP_URL` is used in Telegram reminder links.
 - `CRON_SECRET` protects Telegram and FX cron-style endpoints when configured.
+- Client-side runtime errors are reported to `POST /api/client-errors` and appear in Vercel function logs.
 
 ## Database Setup
 

@@ -1,7 +1,9 @@
 import React, { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import ErrorBoundary from './components/ErrorBoundary'
 import { ToastProvider, useToast } from './components/Toast'
 import { useAuth } from './hooks/useAuth'
+import { logClientError } from './lib/clientErrorLogger'
 
 const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -72,11 +74,30 @@ function PublicOnly({ children }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    const handleError = (event) => {
+      logClientError(event.error || new Error(event.message), { source: 'window-error' })
+    }
+
+    const handleRejection = (event) => {
+      logClientError(event.reason || new Error('Unhandled promise rejection'), { source: 'unhandled-rejection' })
+    }
+
+    window.addEventListener('error', handleError)
+    window.addEventListener('unhandledrejection', handleRejection)
+
+    return () => {
+      window.removeEventListener('error', handleError)
+      window.removeEventListener('unhandledrejection', handleRejection)
+    }
+  }, [])
+
   return (
     <ToastProvider>
-      <BrowserRouter>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
             <Route
               path="/login"
               element={
@@ -162,9 +183,10 @@ export default function App() {
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ErrorBoundary>
     </ToastProvider>
   )
 }

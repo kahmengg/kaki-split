@@ -282,6 +282,13 @@ export default function Profile() {
               <span className="text-sm font-semibold text-gray-700">Terms of Service</span>
               <span className="text-gray-300">&#8250;</span>
             </button>
+            <a
+              href="mailto:hello.kakisplit@gmail.com?subject=Kaki%20Split%20Support"
+              className="w-full px-4 py-3.5 flex items-center justify-between text-left border-t border-gray-50"
+            >
+              <span className="text-sm font-semibold text-gray-700">Contact support</span>
+              <span className="text-xs font-semibold text-sky-600">hello.kakisplit@gmail.com</span>
+            </a>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
