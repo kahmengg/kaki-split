@@ -20,6 +20,10 @@ async function insertDeletedLog({ groupId, deletedBy, itemType, itemId, snapshot
   if (error) throw error
 }
 
+function warningFromError(error, fallback) {
+  return error?.message || fallback
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -78,6 +82,7 @@ export default async function handler(req, res) {
   }
 
   if (itemType === 'expense') {
+    const warnings = []
     const { data: targetExpense, error: expenseLookupError } = await adminSupabase
       .from('expenses')
       .select('*')
@@ -104,8 +109,7 @@ export default async function handler(req, res) {
         snapshot: targetExpense,
       })
     } catch (logError) {
-      res.status(500).json({ error: logError.message || 'Unable to create deleted activity log' })
-      return
+      warnings.push(warningFromError(logError, 'Deleted-log entry could not be created'))
     }
 
     const { error: deleteExpenseError } = await adminSupabase.from('expenses').delete().eq('id', itemId).eq('group_id', groupId)
@@ -122,15 +126,15 @@ export default async function handler(req, res) {
       .contains('payload', { expense_id: itemId })
 
     if (deleteExpenseEventError) {
-      res.status(500).json({ error: deleteExpenseEventError.message || 'Expense deleted, but failed to clean linked activity events' })
-      return
+      warnings.push(warningFromError(deleteExpenseEventError, 'Linked activity event could not be removed'))
     }
 
-    res.status(200).json({ ok: true })
+    res.status(200).json({ ok: true, warnings })
     return
   }
 
   if (itemType === 'payment') {
+    const warnings = []
     const { data: targetPayment, error: paymentLookupError } = await adminSupabase
       .from('payments')
       .select('*')
@@ -157,8 +161,7 @@ export default async function handler(req, res) {
         snapshot: targetPayment,
       })
     } catch (logError) {
-      res.status(500).json({ error: logError.message || 'Unable to create deleted activity log' })
-      return
+      warnings.push(warningFromError(logError, 'Deleted-log entry could not be created'))
     }
 
     const { error: deletePaymentError } = await adminSupabase.from('payments').delete().eq('id', itemId).eq('group_id', groupId)
@@ -175,11 +178,10 @@ export default async function handler(req, res) {
       .contains('payload', { payment_id: itemId })
 
     if (deletePaymentEventError) {
-      res.status(500).json({ error: deletePaymentEventError.message || 'Payment deleted, but failed to clean linked activity events' })
-      return
+      warnings.push(warningFromError(deletePaymentEventError, 'Linked activity event could not be removed'))
     }
 
-    res.status(200).json({ ok: true })
+    res.status(200).json({ ok: true, warnings })
     return
   }
 }

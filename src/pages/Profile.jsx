@@ -312,7 +312,7 @@ export default function Profile() {
               </div>
               <div>
                 <span className="block text-red-500 font-semibold text-sm">Delete account</span>
-                <span className="block text-xs text-gray-400 mt-0.5">Remove login, profile, and payment details.</span>
+                <span className="block text-xs text-gray-400 mt-0.5">Remove login, profile, and PayNow details.</span>
               </div>
             </button>
           </div>
@@ -326,7 +326,7 @@ export default function Profile() {
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
             <p className="text-sm font-bold text-red-700">This deletes your login and personal details.</p>
             <p className="mt-1 text-sm text-red-600">
-              Your Google login, display name, email, profile photo, and PayNow number will be removed. Existing group expenses stay in group
+              Your Google login, display name, email, profile photo, and saved PayNow number will be removed. Existing group expenses stay in group
               history as "Deleted user" so other members' balances are not broken.
             </p>
           </div>

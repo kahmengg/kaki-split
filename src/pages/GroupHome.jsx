@@ -554,7 +554,8 @@ export default function GroupHome() {
 
   const handleShareInvite = async () => {
     try {
-      const origin = window.location.origin
+      const configuredAppUrl = String(import.meta.env.VITE_APP_URL || '').trim().replace(/\/$/, '')
+      const origin = configuredAppUrl || window.location.origin
       await navigator.clipboard.writeText(`${origin}/join/${group.invite_code}`)
       showToast('Invite link copied!', 'success')
     } catch {
@@ -699,6 +700,11 @@ export default function GroupHome() {
         itemType: deleteTarget.type,
         itemId: deleteTarget.id,
       })
+      if (deleteTarget.type === 'payment') {
+        setPayments((current) => current.filter((payment) => payment.id !== deleteTarget.id))
+      } else {
+        setExpenses((current) => current.filter((expense) => expense.id !== deleteTarget.id))
+      }
       showToast(`${deleteTarget.type === 'payment' ? 'Payment' : 'Expense'} deleted`, 'success')
       setDeleteTarget(null)
       await invalidateGroup({ groupId: group.id, userId: user.id })
