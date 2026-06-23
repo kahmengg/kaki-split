@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ToastProvider, useToast } from './components/Toast'
-import { useAuth } from './hooks/useAuth'
+import { getFriendlyAuthError, useAuth } from './hooks/useAuth'
 import { logClientError } from './lib/clientErrorLogger'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -17,6 +17,7 @@ const Profile = lazy(() => import('./pages/Profile'))
 const JoinInvite = lazy(() => import('./pages/JoinInvite'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Privacy = lazy(() => import('./pages/Privacy'))
+const AccountDeletion = lazy(() => import('./pages/AccountDeletion'))
 const AuthVerified = lazy(() => import('./pages/AuthVerified'))
 
 function PageFallback() {
@@ -55,7 +56,7 @@ function PublicOnly({ children }) {
 
   useEffect(() => {
     if (!authError) return
-    showToast(authError, 'error')
+    showToast(getFriendlyAuthError(authError), 'error')
   }, [authError, showToast])
 
   if (loading) {
@@ -108,6 +109,7 @@ export default function App() {
             />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/account-deletion" element={<AccountDeletion />} />
               <Route path="/auth/verified" element={<AuthVerified />} />
 
 

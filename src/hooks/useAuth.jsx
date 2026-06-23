@@ -15,7 +15,22 @@ function isRecoverableAuthLockError(error) {
   return message.includes('auth token was released because another request stole it') || message.includes('lockmanager')
 }
 
-async function withAuthLockRetry(operation, { attempts = 6, baseDelayMs = 120 } = {}) {
+export function getFriendlyAuthError(error) {
+  if (isRecoverableAuthLockError(error)) {
+    return 'Your sign-in session is still syncing. Please wait a moment, then try again.'
+  }
+
+  const message = String(typeof error === 'string' ? error : error?.message || '').trim()
+  if (!message) return 'Unable to verify your session right now. Please sign in again.'
+
+  if (message.toLowerCase().includes('session check timed out')) {
+    return 'Session check took too long. Please close and reopen the app, or sign in again.'
+  }
+
+  return message
+}
+
+async function withAuthLockRetry(operation, { attempts = 8, baseDelayMs = 160 } = {}) {
   let lastError = null
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -172,14 +187,14 @@ export function AuthProvider({ children }) {
             loadProfile(currentSession.user, { softTimeout: true }).catch((profileError) => {
               if (!isMounted) return
               console.error('Failed to load profile during auth bootstrap', profileError)
-              setAuthError(profileError.message || 'Unable to load your profile right now.')
+              setAuthError(getFriendlyAuthError(profileError))
             })
           }
         })
       .catch((error) => {
         console.error('Failed to initialize auth session', error)
         if (!isMounted) return
-        setAuthError(error.message || 'Unable to verify your session right now.')
+        setAuthError(getFriendlyAuthError(error))
       })
       .finally(() => {
         if (isMounted) setLoading(false)
@@ -196,7 +211,7 @@ export function AuthProvider({ children }) {
           } catch (error) {
             console.error('Failed to refresh profile after auth state change', error)
             setProfile(null)
-            setAuthError(error.message || 'Unable to load your profile. Please sign in again.')
+            setAuthError(getFriendlyAuthError(error))
           }
         } else {
 
@@ -235,7 +250,7 @@ export function AuthProvider({ children }) {
 
         const { data, error } = await supabase.auth.exchangeCodeForSession(authCode)
         if (error) {
-          setAuthError(error.message || 'Unable to finish Google sign-in.')
+          setAuthError(getFriendlyAuthError(error))
           return
         }
 
@@ -254,7 +269,7 @@ export function AuthProvider({ children }) {
     }
 
     attachListener().catch((error) => {
-      if (!cancelled) setAuthError(error.message || 'Unable to prepare mobile sign-in.')
+      if (!cancelled) setAuthError(getFriendlyAuthError(error))
     })
 
     return () => {
