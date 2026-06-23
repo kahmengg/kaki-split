@@ -99,6 +99,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 APP_URL=
 GEMINI_API_KEY=
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=
 CRON_SECRET=
 ```
 
@@ -107,7 +108,8 @@ Notes:
 - `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are required by the browser app.
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are required by serverless routes that perform privileged Supabase operations.
 - `APP_URL` is used in Telegram reminder links.
-- `CRON_SECRET` protects Telegram and FX cron-style endpoints when configured.
+- `CRON_SECRET` is required for Telegram and FX cron-style endpoints. Vercel Cron sends it as a bearer token when the environment variable is configured.
+- `TELEGRAM_WEBHOOK_SECRET` is required for Telegram webhooks. Use the same value when setting Telegram's `secret_token`.
 - Client-side runtime errors are captured by the React error boundary and logged locally. Use Sentry or another hosted logger for production-scale monitoring without adding another Vercel Hobby function.
 
 ## Database Setup

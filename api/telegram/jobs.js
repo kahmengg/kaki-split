@@ -15,7 +15,7 @@ function readBearerToken(req) {
 
 function isCronAuthorized(req) {
   const configuredSecret = String(process.env.CRON_SECRET || '').trim()
-  if (!configuredSecret) return true
+  if (!configuredSecret) return false
   const providedToken = readBearerToken(req)
   return providedToken === configuredSecret
 }
@@ -32,6 +32,11 @@ export default async function handler(req, res) {
   }
 
   const action = resolveAction(req)
+
+  if (actionRequiresCronAuth(action) && !process.env.CRON_SECRET) {
+    res.status(503).json({ error: 'CRON_SECRET is not configured' })
+    return
+  }
 
   if (actionRequiresCronAuth(action) && !isCronAuthorized(req)) {
     res.status(401).json({

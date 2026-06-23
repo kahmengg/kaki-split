@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { adminSupabase } from './_lib/db.js'
 
 const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
 
@@ -60,9 +61,26 @@ function normalizeReceipt(parsed) {
   }
 }
 
+async function getAuthenticatedUser(req) {
+  const authHeader = String(req.headers?.authorization || '')
+  const accessToken = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+  if (!accessToken) return null
+
+  const { data, error } = await adminSupabase.auth.getUser(accessToken)
+  if (error || !data?.user) return null
+
+  return data.user
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method_not_allowed' })
+    return
+  }
+
+  const user = await getAuthenticatedUser(req)
+  if (!user) {
+    res.status(401).json({ error: 'unauthorized' })
     return
   }
 

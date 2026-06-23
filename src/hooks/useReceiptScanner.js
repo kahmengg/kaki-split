@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../lib/supabase'
 
 function getReceiptScanMessage(code, details = '') {
   const normalizedCode = String(code || '').trim()
@@ -31,6 +32,14 @@ export function useReceiptScanner() {
     setError(null)
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        throw new Error('Please sign in again before scanning a receipt.')
+      }
+
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => {
@@ -44,7 +53,11 @@ export function useReceiptScanner() {
 
       const response = await fetch('/api/scan-receipt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Receipt scans use a paid AI API, so only signed-in users can call it.
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           imageBase64: base64,
           mimeType: file.type || 'image/jpeg',
