@@ -44,6 +44,17 @@
 }
 
 @layer utilities {
+  @keyframes appSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .app-spinner {
+    animation: appSpin 0.8s linear infinite;
+    will-change: transform;
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

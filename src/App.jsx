@@ -22,7 +22,7 @@ const AuthVerified = lazy(() => import('./pages/AuthVerified'))
 function PageFallback() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+      <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner" />
     </div>
   )
 }
@@ -34,7 +34,7 @@ function RequireAuth({ children }) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mx-auto" />
+          <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner mx-auto" />
           <p className="text-sm text-gray-500 mt-3">Loading your account...</p>
           <p className="text-xs text-gray-400 mt-2">If this takes too long, refresh the page.</p>
         </div>
@@ -61,7 +61,7 @@ function PublicOnly({ children }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner" />
       </div>
     )
   }

@@ -82,7 +82,7 @@ export default function JoinInvite() {
 
         {loading ? (
           <div className="mt-6 flex justify-center">
-            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner" />
           </div>
         ) : user ? (
           <div className="mt-5 space-y-2">

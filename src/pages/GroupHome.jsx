@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
@@ -482,7 +482,7 @@ export default function GroupHome() {
   if (groupQuery.isLoading && !group) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner" />
       </div>
     )
   }
@@ -1042,7 +1042,7 @@ export default function GroupHome() {
           <div className="px-5 py-4 pb-8 space-y-3">
             {loadingDeletedLogs ? (
               <div className="py-8 flex justify-center">
-                <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+                <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner" />
               </div>
             ) : deletedLogs.length === 0 ? (
               <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-5 text-center">

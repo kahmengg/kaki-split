@@ -64,7 +64,7 @@ export default function Login() {
       {isLoading && (
         <div className={`fixed inset-0 z-30 flex items-center justify-center px-6 backdrop-blur-sm ${isDark ? 'bg-slate-950/75' : 'bg-white/75'}`}>
           <div className={`w-full max-w-xs rounded-3xl px-6 py-5 text-center shadow-xl ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
-            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-sky-200 border-t-sky-500" />
+            <div className="mx-auto h-9 w-9 app-spinner rounded-full border-4 border-sky-200 border-t-sky-500" />
             <p className={`mt-3 text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
               Opening Google sign-in...
             </p>
@@ -129,7 +129,7 @@ export default function Login() {
             >
               {loadingProvider === 'google' ? (
                 <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <svg className="h-4 w-4 app-spinner" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4" strokeDashoffset="10" />
                   </svg>
                   Redirecting to Google...

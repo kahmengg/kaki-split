@@ -201,7 +201,7 @@ export default function Dashboard() {
 
         {loading ? (
           <div className="py-14 flex justify-center">
-            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+            <div className="w-9 h-9 border-4 border-sky-200 border-t-sky-500 rounded-full app-spinner" />
           </div>
         ) : groups.length === 0 ? (
           <div className="text-center py-16 px-6">
