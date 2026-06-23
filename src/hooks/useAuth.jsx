@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 const AUTH_INIT_TIMEOUT_MS = 15000
 const PROFILE_LOAD_TIMEOUT_MS = 25000
-const NATIVE_AUTH_CALLBACK_URL = 'com.kahme.kakisplit://auth/callback'
+const NATIVE_AUTH_CALLBACK_URL = 'com.kakisplit.app://auth/callback'
 const POST_AUTH_REDIRECT_KEY = 'kakisplit:postAuthRedirectPath'
 
 function isRecoverableAuthLockError(error) {

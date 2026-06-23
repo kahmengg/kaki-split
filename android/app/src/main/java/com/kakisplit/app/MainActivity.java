@@ -1,4 +1,4 @@
-package com.kahme.kakisplit;
+package com.kakisplit.app;
 
 import com.getcapacitor.BridgeActivity;
 

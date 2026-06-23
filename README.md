@@ -137,7 +137,7 @@ bun run dev
 The Android app is powered by Capacitor. The package id is:
 
 ```text
-com.kahme.kakisplit
+com.kakisplit.app
 ```
 
 Build and sync the web app into Android:
@@ -161,7 +161,7 @@ bun run android:build:debug
 For Google OAuth in the Android app, add this URL to Supabase Auth's allowed redirect URLs:
 
 ```text
-com.kahme.kakisplit://auth/callback
+com.kakisplit.app://auth/callback
 ```
 
 In Google Cloud Console, keep the OAuth redirect URI as the Supabase callback URL shown in Supabase Auth provider settings.
