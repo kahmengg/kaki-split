@@ -205,14 +205,24 @@ export function AuthProvider({ children }) {
       setUser(nextSession?.user ?? null)
 
         if (nextSession?.user) {
-          try {
-            await loadProfile(nextSession.user, { softTimeout: true })
-            setAuthError(null)
-          } catch (error) {
-            console.error('Failed to refresh profile after auth state change', error)
-            setProfile(null)
-            setAuthError(getFriendlyAuthError(error))
-          }
+          // Do not block navigation on profile hydration after Google login.
+          setProfile((currentProfile) => currentProfile || {
+            id: nextSession.user.id,
+            display_name: fallbackName(nextSession.user),
+            email: nextSession.user.email,
+            avatar_url: nextSession.user.user_metadata?.avatar_url || nextSession.user.user_metadata?.picture || null,
+            avatar_color: null,
+            paynow_number: null,
+            paylah_handle: null,
+          })
+          setLoading(false)
+          loadProfile(nextSession.user, { softTimeout: true })
+            .then(() => setAuthError(null))
+            .catch((error) => {
+              console.error('Failed to refresh profile after auth state change', error)
+              setAuthError(getFriendlyAuthError(error))
+            })
+          return
         } else {
 
         setProfile(null)
@@ -258,7 +268,20 @@ export function AuthProvider({ children }) {
         if (nextUser) {
           setSession(data.session)
           setUser(nextUser)
-          await loadProfile(nextUser, { softTimeout: true })
+          setProfile((currentProfile) => currentProfile || {
+            id: nextUser.id,
+            display_name: fallbackName(nextUser),
+            email: nextUser.email,
+            avatar_url: nextUser.user_metadata?.avatar_url || nextUser.user_metadata?.picture || null,
+            avatar_color: null,
+            paynow_number: null,
+            paylah_handle: null,
+          })
+          setLoading(false)
+          loadProfile(nextUser, { softTimeout: true }).catch((profileError) => {
+            console.error('Failed to load profile after mobile sign-in', profileError)
+            setAuthError(getFriendlyAuthError(profileError))
+          })
         }
 
         const redirectPath = localStorage.getItem(POST_AUTH_REDIRECT_KEY) || '/dashboard'

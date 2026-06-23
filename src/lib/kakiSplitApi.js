@@ -812,24 +812,29 @@ export async function createGroup({ userId, name, baseCurrency = 'SGD' }) {
   return group
 }
 
-export async function joinGroupByInviteCode({ inviteCode, userId }) {
+export async function joinGroupByInviteCode({ inviteCode, userId, accessToken = '' }) {
   const normalizedCode = String(inviteCode || '').trim().toUpperCase()
   if (!normalizedCode) throw new Error('Invite code is missing')
   if (!userId) throw new Error('Please sign in to join this group')
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await withAuthLockRetry(() => supabase.auth.getSession())
+  let token = String(accessToken || '').trim()
+  if (!token) {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await withAuthLockRetry(() => supabase.auth.getSession())
 
-  if (sessionError) throw sessionError
-  if (!session?.access_token) throw new Error('Please sign in again to join this group')
+    if (sessionError) throw sessionError
+    token = session?.access_token || ''
+  }
+
+  if (!token) throw new Error('Please sign in again to join this group')
 
   const response = await fetch('/api/join-invite', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ inviteCode: normalizedCode }),
   })

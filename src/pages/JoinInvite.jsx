@@ -1,17 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
-import { joinGroupByInviteCode } from '../lib/kakiSplitApi'
+import { joinGroupByInviteCode, fetchGroupData } from '../lib/kakiSplitApi'
+import { queryKeys } from '../lib/queryClient'
 
 const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
 export default function JoinInvite() {
   const { inviteCode } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const showToast = useToast()
-  const { user, loading } = useAuth()
+  const { user, loading, session } = useAuth()
   const [joining, setJoining] = useState(false)
+  const [joinStep, setJoinStep] = useState('Checking invite...')
   const [joinedGroupName, setJoinedGroupName] = useState('')
   const joinedRef = useRef(false)
 
@@ -32,14 +36,28 @@ export default function JoinInvite() {
 
       async function join() {
         setJoining(true)
+        setJoinStep('Joining group...')
         try {
-          const group = await joinGroupByInviteCode({ inviteCode: normalizedCode, userId: user.id })
+          const group = await joinGroupByInviteCode({
+            inviteCode: normalizedCode,
+            userId: user.id,
+            accessToken: session?.access_token,
+          })
           if (!isMounted) return
           setJoinedGroupName(group.name || '')
+          setJoinStep('Loading group...')
           showToast(`Joined ${group.name || 'group'}!`, 'success')
+
+          // Warm the group page query before navigation so the next screen can
+          // reuse the same in-flight request instead of starting cold.
+          queryClient.prefetchQuery({
+            queryKey: queryKeys.group(group.id, user.id),
+            queryFn: () => fetchGroupData({ groupId: group.id, userId: user.id }),
+          })
+
           window.setTimeout(() => {
             navigate(`/groups/${group.id}`, { replace: true })
-          }, 250)
+          }, 80)
         } catch (error) {
           if (!isMounted) return
 
@@ -64,7 +82,7 @@ export default function JoinInvite() {
     return () => {
       isMounted = false
     }
-  }, [loading, navigate, normalizedCode, showToast, user?.id])
+  }, [loading, navigate, normalizedCode, queryClient, session?.access_token, showToast, user?.id])
 
   const goToLogin = () => {
     localStorage.setItem(PENDING_INVITE_KEY, normalizedCode)
@@ -86,8 +104,8 @@ export default function JoinInvite() {
           </div>
         ) : user ? (
           <div className="mt-5 space-y-2">
-            <p className="text-sm text-gray-600">{joining ? 'Joining group...' : joinedGroupName ? `Joined ${joinedGroupName}` : 'Preparing invite...'}</p>
-            {joining && <p className="text-xs text-gray-400">This usually takes a second.</p>}
+            <p className="text-sm text-gray-600">{joining ? joinStep : joinedGroupName ? `Joined ${joinedGroupName}` : 'Preparing invite...'}</p>
+            {joining && <p className="text-xs text-gray-400">Setting up your group view now.</p>}
           </div>
         ) : (
           <div className="mt-5 space-y-3">
