@@ -18,6 +18,7 @@ const JoinInvite = lazy(() => import('./pages/JoinInvite'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Privacy = lazy(() => import('./pages/Privacy'))
 const AccountDeletion = lazy(() => import('./pages/AccountDeletion'))
+const ChildSafety = lazy(() => import('./pages/ChildSafety'))
 const AuthVerified = lazy(() => import('./pages/AuthVerified'))
 
 function PageFallback() {
@@ -110,6 +111,7 @@ export default function App() {
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/account-deletion" element={<AccountDeletion />} />
+              <Route path="/child-safety" element={<ChildSafety />} />
               <Route path="/auth/verified" element={<AuthVerified />} />
 
 

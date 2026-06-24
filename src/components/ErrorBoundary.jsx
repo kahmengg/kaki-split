@@ -32,7 +32,7 @@ export default class ErrorBoundary extends React.Component {
             >
               Restart app
             </button>
-            <a href="mailto:hello.kakisplit@gmail.com" className="mt-4 block text-sm font-semibold text-sky-600">
+            <a href="mailto:support.kakisplit@gmail.com" className="mt-4 block text-sm font-semibold text-sky-600">
               Contact support
             </a>
           </div>

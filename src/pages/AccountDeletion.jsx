@@ -23,8 +23,8 @@ export default function AccountDeletion() {
         <h2 className="text-lg font-bold text-gray-900 mt-6">Request deletion by email</h2>
         <p className="text-sm text-gray-600 mt-2">
           If you cannot access the app, email{' '}
-          <a href="mailto:hello.kakisplit@gmail.com?subject=Kaki%20Split%20Account%20Deletion" className="font-semibold text-sky-600 hover:text-sky-700">
-            hello.kakisplit@gmail.com
+          <a href="mailto:support.kakisplit@gmail.com?subject=Kaki%20Split%20Account%20Deletion" className="font-semibold text-sky-600 hover:text-sky-700">
+            support.kakisplit@gmail.com
           </a>{' '}
           from the Google email address used for your Kaki Split account. Include the request: "Please delete my Kaki
           Split account."

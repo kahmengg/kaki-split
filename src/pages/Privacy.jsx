@@ -60,8 +60,8 @@ export default function Privacy() {
         <h2 className="text-lg font-bold text-gray-900 mt-6">Contact</h2>
         <p className="text-sm text-gray-600 mt-2">
           For privacy questions or data requests, contact us at{' '}
-          <a href="mailto:hello.kakisplit@gmail.com" className="font-semibold text-sky-600 hover:text-sky-700">
-            hello.kakisplit@gmail.com
+          <a href="mailto:support.kakisplit@gmail.com" className="font-semibold text-sky-600 hover:text-sky-700">
+            support.kakisplit@gmail.com
           </a>
           .
         </p>
