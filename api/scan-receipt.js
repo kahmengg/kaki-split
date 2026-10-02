@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { adminSupabase } from './_lib/db.js'
 
-const RECEIPT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+const RECEIPT_MODEL = process.env.GEMINI_RECEIPT_MODEL || 'gemini-3.1-flash-lite'
 
 function parseJsonFromModelText(text) {
   const raw = String(text || '').trim()
@@ -61,56 +61,95 @@ function normalizeReceipt(parsed) {
   }
 }
 
-async function getAuthenticatedUser(req) {
+async function getAuthenticatedUser(req, supabaseClient) {
   const authHeader = String(req.headers?.authorization || '')
   const accessToken = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
   if (!accessToken) return null
 
-  const { data, error } = await adminSupabase.auth.getUser(accessToken)
-  if (error || !data?.user) return null
+  const { data, error } = await supabaseClient.auth.getUser(accessToken)
+  if (error || !data?.user || data.user.is_anonymous) return null
 
   return data.user
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'method_not_allowed' })
-    return
-  }
+// Inject external clients for tests; production always uses the server credentials.
+export function createReceiptScanHandler({
+  supabaseClient = adminSupabase,
+  createGenAI = (key) => new GoogleGenerativeAI(key),
+} = {}) {
+  return async function handler(req, res) {
+    res.setHeader('Cache-Control', 'no-store')
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'method_not_allowed' })
+      return
+    }
 
-  const user = await getAuthenticatedUser(req)
-  if (!user) {
-    res.status(401).json({ error: 'unauthorized' })
-    return
-  }
+    let user
+    try {
+      user = await getAuthenticatedUser(req, supabaseClient)
+    } catch {
+      res.status(503).json({ error: 'scan_unavailable' })
+      return
+    }
+    if (!user) {
+      res.status(401).json({ error: 'unauthorized' })
+      return
+    }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    res.status(500).json({ error: 'missing_gemini_api_key' })
-    return
-  }
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      res.status(500).json({ error: 'missing_gemini_api_key' })
+      return
+    }
 
-  const imageBase64 = String(req.body?.imageBase64 || '').trim()
-  const mimeType = String(req.body?.mimeType || 'image/jpeg').trim().toLowerCase()
+    const imageBase64 = String(req.body?.imageBase64 || '').trim()
+    const mimeType = String(req.body?.mimeType || 'image/jpeg').trim().toLowerCase()
 
-  if (!imageBase64) {
-    res.status(400).json({ error: 'image_required' })
-    return
-  }
+    if (!imageBase64) {
+      res.status(400).json({ error: 'image_required' })
+      return
+    }
 
-  const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
-  if (!allowedMimeTypes.has(mimeType)) {
-    res.status(400).json({ error: 'unsupported_mime_type' })
-    return
-  }
+    const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+    if (!allowedMimeTypes.has(mimeType)) {
+      res.status(400).json({ error: 'unsupported_mime_type' })
+      return
+    }
 
-  const maxBase64Length = 10 * 1024 * 1024
-  if (imageBase64.length > maxBase64Length) {
-    res.status(413).json({ error: 'image_too_large' })
-    return
-  }
+    // Leave room for JSON below Vercel's 4.5 MB request limit.
+    const maxBase64Length = 4 * 1024 * 1024
+    if (imageBase64.length > maxBase64Length) {
+      res.status(413).json({ error: 'image_too_large' })
+      return
+    }
 
-  const prompt = `You are a receipt parser for a bill-splitting app used in Southeast Asia.
+    // Canonical decoding rejects malformed input without a deeply repeating regex.
+    if (Buffer.from(imageBase64, 'base64').toString('base64') !== imageBase64) {
+      res.status(400).json({ error: 'invalid_image' })
+      return
+    }
+
+    let quota
+    try {
+      // Identity comes from verified Auth, never from request.body.userId.
+      const { data, error } = await supabaseClient.rpc('reserve_receipt_scan', { p_user_id: user.id })
+      const reservation = data?.[0]
+      if (error || !reservation || typeof reservation.allowed !== 'boolean' ||
+        !Number.isInteger(reservation.remaining) || reservation.remaining < 0 || reservation.remaining > 4 ||
+        !Number.isFinite(Date.parse(reservation.resets_at))) throw new Error('quota_unavailable')
+      quota = { limit: 5, remaining: reservation.remaining, resetsAt: reservation.resets_at }
+      if (!reservation.allowed) {
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))))
+        res.status(429).json({ error: 'daily_scan_limit_reached', quota })
+        return
+      }
+    } catch {
+      // Fail closed: database outages must never grant free provider calls.
+      res.status(503).json({ error: 'scan_unavailable' })
+      return
+    }
+
+    const prompt = `You are a receipt parser for a bill-splitting app used in Southeast Asia.
 
 Analyze this receipt image and extract the data. Return ONLY a valid JSON object with no markdown, no explanation, no backticks.
 
@@ -137,52 +176,47 @@ Rules:
 - Do not include trailing commas in JSON.
 - Do not include comments in JSON.`
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    let lastError = null
-
-    for (const modelName of RECEIPT_MODELS) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName })
-        const result = await model.generateContent([
-          {
-            text: prompt,
+    try {
+      const genAI = createGenAI(apiKey)
+      // One reservation permits one call; failures keep their consumed attempt.
+      const model = genAI.getGenerativeModel({ model: RECEIPT_MODEL })
+      const result = await model.generateContent([
+        {
+          text: prompt,
+        },
+        {
+          inlineData: {
+            mimeType,
+            data: imageBase64,
           },
-          {
-            inlineData: {
-              mimeType,
-              data: imageBase64,
-            },
-          },
-        ])
+        },
+      ], { timeout: 25000 })
 
-        const text = result.response.text()
-        const parsed = parseJsonFromModelText(text)
-        const normalized = normalizeReceipt(parsed)
+      const text = result.response.text()
+      const parsed = parseJsonFromModelText(text)
+      const normalized = normalizeReceipt(parsed)
 
-        if (normalized.error) {
-          res.status(200).json(normalized)
-          return
-        }
-
-        if (!Number.isFinite(normalized.total) || normalized.total <= 0) {
-          res.status(200).json({ error: 'unreadable' })
-          return
-        }
-
-        res.status(200).json(normalized)
+      if (normalized.error) {
+        res.status(200).json({ ...normalized, quota })
         return
-      } catch (error) {
-        lastError = error
       }
-    }
 
-    throw lastError || new Error('all_models_failed')
-  } catch (error) {
-    console.error('Receipt scan error:', error)
-    res.status(500).json({
-      error: 'parse_failed',
-      details: error instanceof Error ? error.message : 'unknown_error',
-    })
+      if (!Number.isFinite(normalized.total) || normalized.total <= 0) {
+        res.status(200).json({ error: 'unreadable', quota })
+        return
+      }
+
+      res.status(200).json({ ...normalized, quota })
+      return
+    } catch {
+      // Do not log receipt contents or expose provider/key details to clients.
+      console.error('Receipt scan failed')
+      res.status(500).json({
+        error: 'parse_failed',
+        quota,
+      })
+    }
   }
 }
+
+export default createReceiptScanHandler()

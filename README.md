@@ -246,6 +246,16 @@ Linked Telegram groups can manage notification settings directly in chat:
 
 `POST /api/scan-receipt` accepts `imageBase64` and `mimeType` for JPEG, PNG, or WebP images. It uses Gemini to return normalized merchant, total, currency, date, item, tax, service charge, and discount fields.
 
+Receipt scanning allows **five processing attempts per authenticated, non-anonymous account per Singapore calendar day**. The database reserves an attempt atomically before Gemini is called; unreadable images and provider failures still count. Invalid requests do not count, and database failures block processing. The sixth attempt returns HTTP 429 with `daily_scan_limit_reached`, quota metadata, and a `Retry-After` header. No cron is required: the server selects a new daily row at midnight Asia/Singapore.
+
+For existing databases, apply `db/receipt-scan-quota.sql` before deploying the updated API. New setups include the same definitions in `supabase-schema.sql`. The table and reservation RPC are accessible only to `service_role`; client code cannot change counters. Usage rows reference `auth.users` and are removed on account deletion. These rows contain only account ID, date, and attempt count, not receipt images or extracted contents.
+
+The API makes one Gemini call per reserved attempt, with a 25-second timeout. `GEMINI_RECEIPT_MODEL` optionally overrides the default `gemini-3.1-flash-lite`. Keep this and `GEMINI_API_KEY` server-side. Uploads are limited to 3 MiB before base64 encoding to fit Vercel's request limit. The UI shows the remaining allowance after a scan; the database is always authoritative across devices and page refreshes.
+
+The quota is per account, not per person: separate accounts receive separate allowances. Free Gemini project quotas may also stop processing before every account uses five attempts. For free-tier demos, use synthetic receipts or cover personal details before uploading; the entire image is sent to Google.
+
+Run `bun run test` for API quota regression tests. `tests/receipt-scan-quota.sql` contains transactional database checks; run against the configured Supabase project after applying the SQL. Its changes roll back.
+
 ## Verification
 
 The current production build passes with:

@@ -62,7 +62,7 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
   const amountRef = useRef(null)
   const paidBySectionRef = useRef(null)
   const submitInFlightRef = useRef(false)
-  const { scanReceipt, scanning, error: scanError, setError: setScanError } = useReceiptScanner()
+  const { scanReceipt, scanning, error: scanError, setError: setScanError, quota: scanQuota } = useReceiptScanner()
 
   const focusPaidBySelection = () => {
     window.setTimeout(() => {
@@ -459,6 +459,12 @@ export default function QuickSplit({ members, currentUserId, onSubmit }) {
             >
               {scanning ? 'Scanning receipt...' : <>&#128247; Scan receipt</>}
             </button>
+            <p className="text-xs text-gray-500">
+              {scanQuota && Date.parse(scanQuota.resetsAt) > Date.now()
+                ? `${scanQuota.remaining} of 5 scans remaining today.`
+                : 'Up to 5 receipt scans per account each day.'}
+              {' '}Resets at midnight Singapore time. Processing attempts count even if the receipt cannot be read.
+            </p>
             <input
               ref={fileInputRef}
               type="file"

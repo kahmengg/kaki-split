@@ -11,6 +11,10 @@ function getReceiptScanMessage(code, details = '') {
 
   const messages = {
     image_required: 'Choose a receipt image first.',
+    invalid_image: 'Choose a valid JPEG, PNG, or WebP receipt image.',
+    daily_scan_limit_reached: 'You have used your 5 receipt scans today. Your allowance resets at midnight Singapore time.',
+    scan_unavailable: 'Receipt scanning is temporarily unavailable. Please try again later.',
+    unauthorized: 'Please sign in again before scanning a receipt.',
     unsupported_mime_type: 'Use a JPEG, PNG, or WebP receipt image.',
     image_too_large: 'This image is too large. Try a smaller photo or screenshot.',
     unreadable: "I couldn't read this receipt clearly. Try a sharper, well-lit photo with the full receipt visible.",
@@ -24,6 +28,7 @@ function getReceiptScanMessage(code, details = '') {
 export function useReceiptScanner() {
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState(null)
+  const [quota, setQuota] = useState(null)
 
   async function scanReceipt(file) {
     if (!file) return null
@@ -32,6 +37,8 @@ export function useReceiptScanner() {
     setError(null)
 
     try {
+      // Reject oversized files before FileReader allocates a base64 copy.
+      if (file.size > 3 * 1024 * 1024) throw new Error(getReceiptScanMessage('image_too_large'))
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -55,7 +62,7 @@ export function useReceiptScanner() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Receipt scans use a paid AI API, so only signed-in users can call it.
+          // The server verifies this token and enforces the account's daily quota.
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
@@ -65,6 +72,7 @@ export function useReceiptScanner() {
       })
 
       const data = await response.json().catch(() => null)
+      if (data?.quota) setQuota(data.quota)
       if (!response.ok) {
         // Keep server error codes internal and show people a useful next step.
         throw new Error(getReceiptScanMessage(data?.error, data?.details))
@@ -84,5 +92,5 @@ export function useReceiptScanner() {
     }
   }
 
-  return { scanReceipt, scanning, error, setError }
+  return { scanReceipt, scanning, error, setError, quota }
 }
