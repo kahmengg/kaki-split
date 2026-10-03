@@ -132,6 +132,18 @@ Run the web app:
 bun run dev
 ```
 
+## Install on a Phone (PWA)
+
+The web app can be installed from its HTTPS production URL and launched in standalone mode without the browser address bar. It uses the same artwork as the website logo for its home-screen icon.
+
+- Android Chrome: open the website, then use the browser menu's **Install app** or **Add to Home screen** option.
+- iPhone Safari: open the website, tap **Share → Add to Home Screen**, and enable **Open as Web App** if offered.
+- Launch from the new home-screen icon to use standalone mode. Ordinary browser tabs still show browser controls. Sign-in and external links may temporarily open browser UI.
+
+The service worker caches static app assets only. Sign-in, expense data, and receipt scanning require internet; offline expense entry and synchronization are not supported. App updates show **Update now / Later** so users can finish an expense before a reload. Capacitor builds do not register the web service worker.
+
+Run `bun run verify:pwa` to build and check the manifest, icon sizes, and service worker update behavior. Phone installation must be tested on the deployed HTTPS site. If an older home-screen shortcut already exists, remove it and install again to pick up the manifest and new icon.
+
 ## Android Development
 
 The Android app is powered by Capacitor. The package id is:
