@@ -1,10 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import SwipeDeleteRow from '../components/SwipeDeleteRow'
+import GroupMembers from '../components/GroupMembers'
+import { isGroupAdmin } from '../lib/groupPermissions'
 import Avatar from '../components/Avatar'
 import BottomNav from '../components/BottomNav'
 import BottomSheet from '../components/BottomSheet'
 import ThemeToggle from '../components/ThemeToggle'
 import QuickSplit from './QuickSplit'
+import ExpenseDetails from '../components/ExpenseDetails'
+import PaymentDetails from '../components/PaymentDetails'
 import { useToast } from '../components/Toast'
 import { useAppQueryInvalidation, useGroupData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
@@ -19,11 +24,15 @@ import {
   fetchGroupData,
   fetchTelegramLinkToken,
   updateGroupName,
+  updateExpense,
   updateTelegramSettings,
+  setGroupArchived,
+  changePayment,
+  setGroupMemberRole,
 } from '../lib/kakiSplitApi'
 import { formatMoney, getCategoryIcon, timeAgo } from '../lib/format'
 
-function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency, forceBaseCurrency = false }) {
+function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency, forceBaseCurrency = false, onOpen }) {
   const paidBy = usersById[expense.paid_by]
   const settledCurrency = groupBaseCurrency || 'SGD'
   const originalCurrency = String(expense.original_currency || settledCurrency).trim().toUpperCase()
@@ -61,14 +70,13 @@ function ExpenseRow({ expense, usersById, currentUserId, groupBaseCurrency, forc
             </div>
           </div>
           <p className="text-[11px] text-gray-500 mt-1 truncate">{personalSummary}</p>
-
-
+          <button type="button" aria-label={`View details for ${expense.description}`} onClick={onOpen} className="text-xs font-semibold text-sky-700 mt-1">View details{expense.revision > 0 ? ' · corrected' : ''}</button>
       </div>
     </div>
   )
 }
 
-function PaymentRow({ payment, usersById, currentUserId, currency }) {
+function PaymentRow({ payment, usersById, currentUserId, currency, onOpen }) {
   const fromUser = usersById[payment.from_user_id]
   const toUser = usersById[payment.to_user_id]
   const fromLabel = payment.from_user_id === currentUserId ? 'You' : fromUser?.display_name || 'Member'
@@ -80,65 +88,16 @@ function PaymentRow({ payment, usersById, currentUserId, currency }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 text-sm truncate">Payment recorded</p>
-            <p className="text-gray-500 text-xs mt-0.5 truncate">{fromLabel} paid {toLabel}</p>
+            <p className="font-semibold text-gray-900 text-sm truncate">{payment.voided_at ? 'Payment record voided' : 'Payment recorded'}</p>
+            <p className="text-gray-500 text-xs mt-0.5 truncate">Recorded from {fromLabel} to {toLabel}</p>
           </div>
           <div className="text-right flex-shrink-0">
             <p className="font-bold text-gray-900 text-sm">{formatMoney(payment.amount, currency || 'SGD')}</p>
           </div>
         </div>
         <p className="text-[11px] text-gray-500 mt-1 truncate">{timeAgo(payment.created_at)}</p>
-      </div>
-    </div>
-  )
-}
-
-function SwipeDeleteRow({ children, canDelete, onDelete }) {
-  const [offset, setOffset] = useState(0)
-  const startXRef = useRef(null)
-  const maxOffset = -86
-
-  const handlePointerDown = (event) => {
-    if (!canDelete) return
-    startXRef.current = event.clientX
-  }
-
-  const handlePointerMove = (event) => {
-    if (!canDelete || startXRef.current === null) return
-    const delta = event.clientX - startXRef.current
-    setOffset(Math.max(maxOffset, Math.min(0, delta)))
-  }
-
-  const handlePointerUp = () => {
-    if (!canDelete || startXRef.current === null) return
-    setOffset((current) => (current < -42 ? maxOffset : 0))
-    startXRef.current = null
-  }
-
-  if (!canDelete) return children
-
-  return (
-    <div className="relative overflow-hidden border-b border-gray-50 last:border-0">
-      <button
-        type="button"
-        onClick={() => {
-          setOffset(0)
-          onDelete()
-        }}
-        className="absolute inset-y-0 right-0 w-[86px] bg-red-500 text-white text-xs font-bold flex items-center justify-center"
-        style={{ transform: offset === 0 ? 'translateX(100%)' : 'translateX(0)' }}
-      >
-        Delete
-      </button>
-      <div
-        className="relative bg-white touch-pan-y transition-transform"
-        style={{ transform: `translateX(${offset}px)` }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        {children}
+        <p className="text-xs text-gray-600 mt-1">{payment.voided_at ? 'Excluded from balances' : payment.acknowledged_at ? 'Receipt acknowledged' : 'Receipt not acknowledged'}</p>
+        <button onClick={onOpen} aria-label={`View payment details from ${fromLabel} to ${toLabel}`} className="text-sm font-semibold text-sky-700 py-2">View details</button>
       </div>
     </div>
   )
@@ -160,20 +119,20 @@ function SmartBalanceCard({ balance, usersById, currentUserId, onPay, currency }
             <p className="font-bold text-gray-900 text-sm truncate">
               {iOwe
                 ? `You owe ${toUser?.display_name || 'member'}`
-                : `${fromUser?.display_name || 'Member'} owes you ${formatMoney(balance.amount, currency || 'SGD')}`}
+                : `${fromUser?.display_name || 'Member'} owes you`}
             </p>
-            {iOwe && <p className="font-black text-lg text-red-500">{formatMoney(balance.amount, currency || 'SGD')}</p>}
+            <p className={`font-black text-lg ${iOwe ? 'text-red-500' : 'text-sky-700'}`}>{formatMoney(balance.amount, currency || 'SGD')}</p>
 
         </div>
       </div>
 
-      {iOwe && (
+      {(iOwe || owedToMe) && (
         <button
           onClick={() => onPay(balance)}
           className="px-4 py-2 rounded-full bg-sky-500 text-white font-bold text-sm active:scale-95 transition-transform"
           style={{ boxShadow: '0 2px 10px rgba(14,165,233,0.35)' }}
         >
-          Pay
+          {iOwe ? 'Pay' : 'Record received payment'}
         </button>
       )}
     </div>
@@ -336,8 +295,28 @@ export default function GroupHome() {
   const [payments, setPayments] = useState([])
   const [balances, setBalances] = useState([])
 
+  const [showMembers, setShowMembers] = useState(false)
+  const roleBusyRef = useRef(false)
   const [showQuickSplit, setShowQuickSplit] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState(null)
+  const [selectedPayment, setSelectedPayment] = useState(null)
+  const [paymentVoidRequested, setPaymentVoidRequested] = useState(false)
+  const paymentDraftRef = useRef({ dirty: false, busy: false })
+  const paymentChangeRef = useRef(false)
+  const handlePaymentDraft = React.useCallback(draft => { paymentDraftRef.current = draft }, [])
+  useEffect(() => { setSelectedPayment(current => current ? payments.find(payment => payment.id === current.id) || null : null) }, [payments])
+  const correctionDraftRef = useRef({ dirty: false, busy: false })
+  const correctionInFlightRef = useRef(false)
+  const handleCorrectionDraft = React.useCallback((draft) => { correctionDraftRef.current = draft }, [])
+  useEffect(() => {
+    if (!location.state?.openExpense) return
+    setShowQuickSplit(true)
+    navigate(location.pathname, { replace: true, state: { ...location.state, openExpense: false } })
+  }, [location, navigate])
   const [showMenu, setShowMenu] = useState(false)
+  const [showArchiveSheet, setShowArchiveSheet] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const archiveInFlightRef = useRef(false)
   const [showTelegramSheet, setShowTelegramSheet] = useState(false)
   const [showTelegramOnboarding, setShowTelegramOnboarding] = useState(false)
   const [showEditGroupNameSheet, setShowEditGroupNameSheet] = useState(false)
@@ -351,6 +330,8 @@ export default function GroupHome() {
   const [deletingGroup, setDeletingGroup] = useState(false)
   const [groupNameDraft, setGroupNameDraft] = useState('')
   const [savingGroupName, setSavingGroupName] = useState(false)
+  const expenseDraftRef = useRef({ dirty: false, busy: false })
+  const handleDraftChange = React.useCallback((draft) => { expenseDraftRef.current = draft }, [])
   const addExpenseInFlightRef = useRef(false)
 
   const [telegramConnected, setTelegramConnected] = useState(false)
@@ -499,6 +480,7 @@ export default function GroupHome() {
   const allSettled = myBalances.length === 0
   const debtReminder = balances.find((balance) => balance.from === user.id)
   const isOwner = group.created_by === user.id
+  const canManageActivity = isGroupAdmin(group, user.id, members)
 
   const activityItems = [
     ...expenses.map((expense) => ({
@@ -522,8 +504,24 @@ export default function GroupHome() {
     navigate(`/groups/${id}/pay?from=${balance.from}&to=${balance.to}&amount=${balance.amount}`)
   }
 
+  const handleCorrectExpense = async (expense, payload) => {
+    if (correctionInFlightRef.current) return false
+    if (payments.length > 0 && !window.confirm('Payments already exist in this group. Save this correction and recalculate outstanding balances? Recorded payments will stay unchanged.')) return false
+    correctionInFlightRef.current = true
+    try {
+      await updateExpense({ groupId: id, amount: payload.amount, description: payload.description,
+        category: payload.category, paidBy: payload.paid_by, splitMembers: payload.split_members,
+        splitType: payload.split_type, splitValues: payload.split_values, currency: payload.currency, reviewedQuote: payload.reviewedQuote,
+        baseCurrency: group.base_currency, createdBy: user.id, expenseToEdit: expense, acknowledgePayments: payments.length > 0 })
+      // Saving succeeded even if a subsequent refresh fails: never invite a duplicate retry.
+      setSelectedExpense(null)
+      showToast('Correction saved. Balances updated and change history recorded.', 'success')
+      await invalidateGroup({ groupId: id, userId: user.id }).catch(() => showToast('Correction saved. Refresh to load the latest balances.', 'error'))
+    } finally { correctionInFlightRef.current = false }
+  }
+
   const handleAddExpense = async (payload) => {
-    if (addExpenseInFlightRef.current) return
+    if (addExpenseInFlightRef.current) return false
     addExpenseInFlightRef.current = true
 
       try {
@@ -537,6 +535,8 @@ export default function GroupHome() {
           splitType: payload.split_type,
           splitValues: payload.split_values,
           currency: payload.currency,
+          reviewedQuote: payload.reviewedQuote,
+          requestId: payload.requestId,
           baseCurrency: group.base_currency,
           createdBy: user.id,
         })
@@ -544,9 +544,10 @@ export default function GroupHome() {
 
       setShowQuickSplit(false)
       showToast('Expense added!', 'success')
-      await invalidateGroup({ groupId: id, userId: user.id })
+      await invalidateGroup({ groupId: id, userId: user.id }).catch(() => showToast('Expense saved. Refresh to load the latest balances.', 'error'))
     } catch (error) {
       showToast(error.message || 'Unable to add expense', 'error')
+      throw error
     } finally {
       addExpenseInFlightRef.current = false
     }
@@ -699,6 +700,7 @@ export default function GroupHome() {
         groupId: group.id,
         itemType: deleteTarget.type,
         itemId: deleteTarget.id,
+        expectedRevision: deleteTarget.item?.revision || 0,
       })
       if (deleteTarget.type === 'payment') {
         setPayments((current) => current.filter((payment) => payment.id !== deleteTarget.id))
@@ -707,7 +709,7 @@ export default function GroupHome() {
       }
       showToast(`${deleteTarget.type === 'payment' ? 'Payment' : 'Expense'} deleted`, 'success')
       setDeleteTarget(null)
-      await invalidateGroup({ groupId: group.id, userId: user.id })
+      await invalidateGroup({ groupId: group.id, userId: user.id }).catch(() => showToast('Expense deleted. Refresh to load the latest balances.', 'error'))
     } catch (error) {
       showToast(error.message || 'Unable to delete activity item', 'error')
     } finally {
@@ -737,7 +739,7 @@ export default function GroupHome() {
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => navigate('/dashboard')} className="text-gray-500 -ml-1">
+            <button aria-label="Back to dashboard" onClick={() => navigate('/dashboard')} className="text-gray-500 -ml-1">
               <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
@@ -750,7 +752,7 @@ export default function GroupHome() {
 
             </div>
             <ThemeToggle className="px-2.5" />
-            <button onClick={() => setShowMenu(true)} className="text-gray-400 p-1">
+            <button aria-label="Group actions" onClick={() => setShowMenu(true)} className="text-gray-400 p-1">
               <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
                 <path d="M12 6a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4z" />
               </svg>
@@ -760,16 +762,16 @@ export default function GroupHome() {
 
           <div className="flex items-start gap-1.5 flex-wrap">
             {members.map((member) => {
-              const chipLabel = member.id === user.id ? 'You' : member.display_name.split(' ')[0]
+              const chipLabel = member.id === user.id ? 'You' : member.display_name
 
               return (
                 <div key={member.id} className="w-14 flex flex-col items-center gap-1">
                   <Avatar user={member} size="sm" ring={member.id === user.id} />
-                  <span className="w-full text-center text-[10px] text-gray-400 font-medium truncate px-0.5">{chipLabel}</span>
+                  <span className="w-full text-center text-xs text-gray-600 font-medium break-words px-0.5">{chipLabel}</span>
                 </div>
               )
             })}
-            <button onClick={handleShareInvite} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-1 flex-shrink-0">
+            <button aria-label="Invite members" onClick={handleShareInvite} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center ml-1 flex-shrink-0">
 
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -779,37 +781,6 @@ export default function GroupHome() {
       </div>
 
         <div className="px-4 pt-4 space-y-3">
-          {!telegramConnected && (
-            <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3.5 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sky-900 text-sm font-semibold">Connect Telegram for reminders</p>
-                <p className="text-sky-700 text-xs mt-0.5">Add @{telegramBotUsername} to your group and link with your code.</p>
-              </div>
-              <button
-                onClick={() => setShowTelegramSheet(true)}
-                className="px-3 py-2 rounded-full bg-white border border-sky-200 text-sky-700 text-xs font-bold flex-shrink-0"
-              >
-                Connect
-              </button>
-            </div>
-          )}
-
-          {debtReminder && showReminderBanner && (
-
-          <div className="relative bg-amber-50 border border-amber-200 rounded-2xl p-3.5 pr-10">
-            <button onClick={() => setShowReminderBanner(false)} className="absolute top-2 right-2 text-amber-500 text-xs" aria-label="Dismiss reminder">
-              &times;
-            </button>
-              <p className="text-amber-800 text-xs font-medium leading-relaxed">
-                {usersById[debtReminder.to]?.display_name || 'A member'} is reminding you - you owe {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} &middot;{' '}
-                <button onClick={() => handlePay(debtReminder)} className="text-sky-600 font-bold">
-                  Pay now &rarr;
-                </button>
-              </p>
-
-          </div>
-        )}
-
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">Your balances</p>
           {allSettled ? (
@@ -835,6 +806,37 @@ export default function GroupHome() {
             </div>
           )}
         </div>
+
+          {!telegramConnected && (
+            <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3.5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sky-900 text-sm font-semibold">Connect Telegram for reminders</p>
+                <p className="text-sky-700 text-xs mt-0.5">Add @{telegramBotUsername} to your group and link with your code.</p>
+              </div>
+              <button
+                onClick={() => setShowTelegramSheet(true)}
+                className="px-3 py-2 rounded-full bg-white border border-sky-200 text-sky-700 text-xs font-bold flex-shrink-0"
+              >
+                Connect
+              </button>
+            </div>
+          )}
+
+          {debtReminder && showReminderBanner && (
+
+          <div className="relative bg-amber-50 border border-amber-200 rounded-2xl p-3.5 pr-10">
+            <button onClick={() => setShowReminderBanner(false)} className="absolute top-2 right-2 text-amber-500 text-xs" aria-label="Dismiss reminder">
+              &times;
+            </button>
+              <p className="text-amber-800 text-xs font-medium leading-relaxed">
+                You owe {usersById[debtReminder.to]?.display_name || 'a member'} {formatMoney(debtReminder.amount, group.base_currency)} in {group.name} &middot;{' '}
+                <button onClick={() => handlePay(debtReminder)} className="text-sky-600 font-bold">
+                  Pay now &rarr;
+                </button>
+              </p>
+
+          </div>
+        )}
 
           <div>
             <div className="flex items-center justify-between mb-2 px-1 gap-2">
@@ -865,12 +867,21 @@ export default function GroupHome() {
                 {activityItems.map((activityItem) => (
                   <SwipeDeleteRow
                     key={`${activityItem.type}-${activityItem.id}`}
-                    canDelete={isOwner}
-                    onDelete={() => setDeleteTarget(activityItem)}
+                    canDelete={activityItem.type === 'payment'
+                      ? !activityItem.item.voided_at && (canManageActivity || activityItem.item.created_by === user.id)
+                      : canManageActivity}
+                    label={activityItem.label}
+                    onDelete={() => {
+                      // Payment removal reverses the ledger through the audited void flow.
+                      if (activityItem.type === 'payment') {
+                        paymentDraftRef.current = { dirty: false, busy: false }
+                        setPaymentVoidRequested(true); setSelectedPayment(activityItem.item)
+                      } else setDeleteTarget(activityItem)
+                    }}
                   >
                     <div className="px-4">
                       {activityItem.type === 'payment' ? (
-                        <PaymentRow payment={activityItem.item} usersById={usersById} currentUserId={user.id} currency={group.base_currency} />
+                        <PaymentRow payment={activityItem.item} usersById={usersById} currentUserId={user.id} currency={group.base_currency} onOpen={() => { paymentDraftRef.current = { dirty: false, busy: false }; setPaymentVoidRequested(false); setSelectedPayment(activityItem.item) }} />
                       ) : (
                         <ExpenseRow
                           expense={activityItem.item}
@@ -878,6 +889,7 @@ export default function GroupHome() {
                           currentUserId={user.id}
                           groupBaseCurrency={group.base_currency}
                           forceBaseCurrency={showAllInBaseCurrency}
+                          onOpen={() => { correctionDraftRef.current = { dirty: false, busy: false }; setSelectedExpense(activityItem.item) }}
                         />
                       )}
                     </div>
@@ -890,8 +902,62 @@ export default function GroupHome() {
 
       <BottomNav onFABPress={() => setShowQuickSplit(true)} groupId={id} />
 
-      <BottomSheet isOpen={showQuickSplit} onClose={() => setShowQuickSplit(false)} title="Add Expense">
-        <QuickSplit members={members} currentUserId={user.id} onSubmit={handleAddExpense} />
+      <BottomSheet isOpen={showMembers} onClose={() => setShowMembers(false)} confirmClose={() => !roleBusyRef.current} title="Group members">
+        <GroupMembers group={group} members={members} currentUserId={user.id} onBusyChange={value => { roleBusyRef.current = value }} onRoleChange={async input => {
+          const saved = await setGroupMemberRole({ groupId: id, ...input })
+          setMembers(rows => rows.map(member => member.id === saved.user_id ? { ...member, role: saved.role } : member))
+          setUsersById(rows => ({ ...rows, [saved.user_id]: { ...rows[saved.user_id], role: saved.role } }))
+          showToast(saved.role === 'admin' ? 'Admin access granted.' : 'Admin access removed.', 'success')
+          await invalidateGroup({ groupId: id, userId: user.id }).catch(() => showToast('Role updated. Refresh to load the latest members.', 'error'))
+        }} />
+      </BottomSheet>
+      <BottomSheet isOpen={showQuickSplit} onClose={() => setShowQuickSplit(false)} confirmClose={() => !expenseDraftRef.current.busy} title="Add Expense">
+        <QuickSplit key={id} groupId={id} members={members} currentUserId={user.id} onSubmit={handleAddExpense} baseCurrency={group.base_currency} onDraftChange={handleDraftChange} />
+      </BottomSheet>
+
+      <BottomSheet isOpen={Boolean(selectedExpense)} onClose={() => setSelectedExpense(null)} title="Expense details" confirmClose={() => !correctionDraftRef.current.busy && (!correctionDraftRef.current.dirty || window.confirm('Discard this unfinished correction?'))}>
+        {selectedExpense && <ExpenseDetails key={selectedExpense.id} expense={selectedExpense} group={group} members={members} usersById={usersById} currentUserId={user.id} paymentsExist={payments.length > 0} onSave={handleCorrectExpense} onDraftChange={handleCorrectionDraft} />}
+      </BottomSheet>
+
+      <BottomSheet isOpen={showArchiveSheet} onClose={() => setShowArchiveSheet(false)} confirmClose={() => !archiveInFlightRef.current} title={group.is_archived ? 'Restore group' : 'Archive group for yourself'}>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm text-gray-700">{group.is_archived ? 'Restore this group to Active on your Home page.' : 'Hide this group from Active on your Home page. You can still open it from Archived.'} Other members, history and balances stay unchanged.</p>
+          {balances.some(balance => balance.from === user.id || balance.to === user.id) && <p className="text-sm font-semibold text-amber-700 bg-amber-50 rounded-xl p-3">You still have outstanding balances here. Archiving does not settle them; they remain in your balance overview.</p>}
+          <button disabled={archiving} onClick={async () => {
+            if (archiveInFlightRef.current) return
+            archiveInFlightRef.current = true
+            setArchiving(true)
+            const archived = !group.is_archived
+            try {
+              await setGroupArchived({ groupId: id, userId: user.id, archived })
+              setGroup(current => ({ ...current, is_archived: archived }))
+              setShowArchiveSheet(false)
+              showToast(archived ? 'Group archived for you' : 'Group restored to Active', 'success')
+              // A refresh failure must not report the already-saved preference as failed.
+              invalidateGroup({ groupId: id, userId: user.id }).catch(() => showToast('Saved. Refresh Home to see your updated list.', 'error'))
+            } catch (error) {
+              showToast(error.message || 'Unable to update archive preference. Try again.', 'error')
+            } finally {
+              archiveInFlightRef.current = false
+              setArchiving(false)
+            }
+          }} className="w-full py-4 rounded-2xl bg-sky-500 text-white font-bold disabled:opacity-60">{archiving ? 'Saving…' : group.is_archived ? 'Restore to Active' : 'Archive for me'}</button>
+        </div>
+      </BottomSheet>
+
+      <BottomSheet isOpen={Boolean(selectedPayment)} onClose={() => setSelectedPayment(null)} confirmClose={() => !paymentChangeRef.current && (!paymentDraftRef.current.dirty || window.confirm('Discard this unfinished reason?'))} title="Payment details">
+        {selectedPayment && <PaymentDetails key={`${selectedPayment.id}:${paymentVoidRequested}`} startCorrection={paymentVoidRequested} payment={selectedPayment} group={group} usersById={usersById} currentUserId={user.id} onDraftChange={handlePaymentDraft} onChange={async input => {
+          if (paymentChangeRef.current) throw new Error('A change is already being saved.')
+          paymentChangeRef.current = true
+          try {
+            const saved = await changePayment({ ...input, userId: user.id })
+            setPayments(current => current.map(payment => payment.id === saved.id ? saved : payment))
+            setSelectedPayment(saved)
+            showToast(input.action === 'void' ? 'Payment record voided; balances recalculated' : 'Receipt acknowledged', 'success')
+            invalidateGroup({ groupId: id, userId: user.id }).catch(() => showToast('Saved. Refresh the group for the latest balances.', 'error'))
+            return saved
+          } finally { paymentChangeRef.current = false }
+        }} />}
       </BottomSheet>
 
       <BottomSheet isOpen={showMenu} onClose={() => setShowMenu(false)}>
@@ -922,11 +988,31 @@ export default function GroupHome() {
           </button>
 
           <button
+            onClick={() => {
+              setShowMenu(false)
+              navigate(`/groups/${id}/summary`)
+            }}
+            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-8 h-6" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5" /></svg>
+            <span className="font-semibold text-gray-800 text-sm">Trip Summary</span>
+          </button>
+
+          <button onClick={() => { setShowMenu(false); setShowMembers(true) }} className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left hover:bg-gray-50">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-8 h-6" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0112 0v3M16 4a3 3 0 010 6M18 14a5 5 0 013 4v3"/></svg>
+            <span className="font-semibold text-gray-800 text-sm">{canManageActivity ? 'Manage members' : 'Group members'}</span>
+          </button>
+          <button
             onClick={handleOpenDeletedLogs}
             className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left"
           >
             <span className="text-xl w-8 text-center">&#128220;</span>
             <span className="font-semibold text-gray-800 text-sm">View deleted logs</span>
+          </button>
+
+          <button onClick={() => { setShowMenu(false); setShowArchiveSheet(true) }} className="w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl hover:bg-gray-50 text-left">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-8 h-6" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3h18v5H3zM5 8v13h14V8M9 12h6" /></svg>
+            <span className="font-semibold text-gray-800 text-sm">{group.is_archived ? 'Restore group to Active' : 'Archive group for me'}</span>
           </button>
 
           <button
@@ -957,10 +1043,10 @@ export default function GroupHome() {
         <BottomSheet isOpen={showEditGroupNameSheet} onClose={() => setShowEditGroupNameSheet(false)} title="Edit group name">
           <div className="px-5 py-4 pb-8 space-y-4">
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Group name</label>
+              <label htmlFor="edit-group-name" className="text-sm font-semibold text-gray-600 block mb-1.5">Group name</label>
               <input
                 type="text"
-                value={groupNameDraft}
+                id="edit-group-name" value={groupNameDraft}
                 onChange={(e) => setGroupNameDraft(e.target.value)}
                 maxLength={80}
                 placeholder="Enter group name"

@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { queryKeys } from '../lib/queryClient'
+import { clearReadCaches } from '../lib/kakiSplitApi'
 
 const GROUP_TABLES = ['expenses', 'payments', 'activity_events', 'deleted_activity_logs']
 
@@ -27,9 +28,11 @@ export function useGroupRealtime({ groupId, userId, enabled = true } = {}) {
     if (!enabled || !groupId || !userId) return undefined
 
     const invalidation = scheduleInvalidation(() => {
+      clearReadCaches({ groupId, userId })
       queryClient.invalidateQueries({ queryKey: ['group', groupId] })
       queryClient.invalidateQueries({ queryKey: queryKeys.insights(groupId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.activity(userId) })
     })
 
     const channel = supabase
@@ -38,6 +41,9 @@ export function useGroupRealtime({ groupId, userId, enabled = true } = {}) {
         invalidation.run()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `group_id=eq.${groupId}` }, () => {
+        invalidation.run()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_user_preferences', filter: `user_id=eq.${userId}` }, () => {
         invalidation.run()
       })
 
@@ -65,12 +71,17 @@ export function useDashboardRealtime({ userId, groups = [], enabled = true } = {
     if (!enabled || !userId) return undefined
 
     const invalidation = scheduleInvalidation(() => {
+      clearReadCaches({ userId })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.activity(userId) })
     })
 
     const channel = supabase
       .channel(`dashboard-realtime:${userId}:${groupIdKey || 'empty'}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `user_id=eq.${userId}` }, () => {
+        invalidation.run()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_user_preferences', filter: `user_id=eq.${userId}` }, () => {
         invalidation.run()
       })
 

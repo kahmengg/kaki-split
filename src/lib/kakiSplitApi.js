@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { computeNetBalances, settleNetBalances } from './balances'
+import { normalizeExpenseQuote, quoteMatches } from './expenseQuotes'
+import { summarizeExpenses, convertedExpenseAmount } from './expenseReview'
 
 const PENDING_INVITE_KEY = 'kakisplit:pendingInviteCode'
 
@@ -42,7 +44,7 @@ function setReadCache(cacheMap, key, data) {
   })
 }
 
-function clearReadCaches({ groupId = null, userId = null } = {}) {
+export function clearReadCaches({ groupId = null, userId = null } = {}) {
   if (!groupId && !userId) {
     dashboardReadCache.clear()
     groupReadCache.clear()
@@ -272,7 +274,7 @@ async function fetchExchangeRateViaOpenErApi({ fromCurrency, toCurrency, signal 
 
   return {
     rate,
-    asOfDate: new Date().toISOString().slice(0, 10),
+    asOfDate: Number(payload?.time_last_update_unix) > 0 ? new Date(Number(payload.time_last_update_unix) * 1000).toISOString().slice(0, 10) : null,
     source: 'open_er_api',
   }
 }
@@ -398,6 +400,7 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
         rate: stored.rate,
         asOfDate: stored.asOfDate,
         source: stored.source,
+        fallback: true,
         fetchedAt: Date.now(),
       }
       fxRateCache.set(cacheKey, fallback)
@@ -406,6 +409,13 @@ async function fetchLiveExchangeRate({ fromCurrency, toCurrency, preferDate = nu
 
     throw error
   }
+}
+
+export async function fetchExpenseQuote({ fromCurrency, toCurrency, savedExpense = null }) {
+  const saved = savedExpense?.original_currency === fromCurrency && Number(savedExpense.exchange_rate) > 0
+  const quote = saved ? { rate: savedExpense.exchange_rate, source: savedExpense.exchange_rate_source || 'saved rate',
+    asOfDate: savedExpense.exchange_rate_date, saved: true } : await fetchLiveExchangeRate({ fromCurrency, toCurrency })
+  return normalizeExpenseQuote(quote, fromCurrency, toCurrency)
 }
 
 export async function prewarmExchangeRates({ baseCurrency = 'SGD', quoteCurrencies = [] } = {}) {
@@ -457,7 +467,7 @@ export function toAppUser(profile) {
 
 function toMemberUser(row) {
   const profileUser = toAppUser(row?.profiles)
-  if (profileUser) return profileUser
+  if (profileUser) return { ...profileUser, role: row.role || 'member' }
 
   const fallbackId = row?.user_id
   if (!fallbackId) return null
@@ -465,6 +475,7 @@ function toMemberUser(row) {
   const short = String(fallbackId).slice(0, 8)
   return {
     id: fallbackId,
+    role: row.role || 'member',
     name: `Member ${short}`,
     display_name: `Member ${short}`,
     email: null,
@@ -641,7 +652,7 @@ export async function fetchGroupMembers(groupId) {
 
   const { data: memberRows, error: membersError } = await supabase
     .from('group_members')
-    .select(`group_id,user_id,profiles:user_id(${PROFILE_COLUMNS})`)
+    .select(`group_id,user_id,role,profiles:user_id(${PROFILE_COLUMNS})`)
     .eq('group_id', groupId)
 
   if (membersError) throw membersError
@@ -686,7 +697,7 @@ export async function fetchDashboardData(userId) {
 
     const groupIds = groups.map((group) => group.id)
 
-    const [{ data: allMemberRows, error: allMembersError }, { data: expenses, error: expensesError }, { data: payments, error: paymentsError }] =
+    const [{ data: allMemberRows, error: allMembersError }, { data: expenses, error: expensesError }, { data: payments, error: paymentsError }, preferencesResult] =
       await Promise.all([
         supabase
           .from('group_members')
@@ -698,13 +709,16 @@ export async function fetchDashboardData(userId) {
           .in('group_id', groupIds),
         supabase
           .from('payments')
-          .select('id,group_id,from_user_id,to_user_id,amount,created_at')
+          .select('id,group_id,from_user_id,to_user_id,amount,created_at,voided_at')
           .in('group_id', groupIds),
+        supabase.from('group_user_preferences').select('group_id,archived_at').eq('user_id', userId),
       ])
 
     if (allMembersError) throw allMembersError
     if (expensesError) throw expensesError
     if (paymentsError) throw paymentsError
+    if (preferencesResult.error) throw preferencesResult.error
+    const archivedGroupIds = new Set((preferencesResult.data || []).filter(row => row.archived_at).map(row => row.group_id))
 
     const expenseIds = (expenses || []).map((expense) => expense.id)
     let splits = []
@@ -755,6 +769,7 @@ export async function fetchDashboardData(userId) {
 
       return {
         ...group,
+        is_archived: archivedGroupIds.has(group.id),
         member_ids: memberIds,
         my_balance: round2(net.get(userId) || 0),
         total_spent: round2(totalSpent),
@@ -973,53 +988,29 @@ export async function clearGroupActivity({ groupId, confirmationText }) {
   return payload || { ok: true }
 }
 
-export async function deleteGroupActivityItem({ groupId, itemType, itemId }) {
-  if (!groupId) throw new Error('Group is required')
-  if (!itemId) throw new Error('Item is required')
-
-  const normalizedType = String(itemType || '').trim().toLowerCase()
-  if (!['expense', 'payment'].includes(normalizedType)) {
-    throw new Error('Invalid activity item type')
-  }
-
-  const accessToken = await getSessionAccessToken('Please sign in again to delete this item')
-
-  const response = await fetch('/api/groups/delete-activity-item', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ groupId, itemType: normalizedType, itemId }),
-  })
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new Error(payload?.error || 'Unable to delete this activity item')
-  }
-
+export async function setGroupMemberRole({ groupId, userId, role, expectedRole }) {
+  const { data, error } = await supabase.rpc('set_group_member_role', { p_group_id: groupId, p_user_id: userId, p_role: role, p_expected_role: expectedRole })
+  if (error) throw new Error(error.message || 'Unable to change member role')
   clearReadCaches({ groupId })
-  return payload || { ok: true }
+  return data
+}
+
+export async function deleteGroupActivityItem({ groupId, itemType, itemId, expectedRevision }) {
+  if (itemType !== 'expense') throw new Error('Open payment details to void this record with a reason.')
+  // Authenticated deletion and the retained snapshot commit together, including on Vite.
+  const { data, error } = await supabase.rpc('delete_group_expense', { p_group_id: groupId, p_expense_id: itemId, p_expected_revision: expectedRevision })
+  if (error) throw new Error(error.message || 'Unable to delete expense')
+  clearReadCaches({ groupId })
+  return data
 }
 
 export async function fetchDeletedActivityLogs({ groupId }) {
   if (!groupId) return []
-
-  const accessToken = await getSessionAccessToken('Please sign in again to view deleted logs')
-  const query = new URLSearchParams({ groupId })
-  const response = await fetch(`/api/groups/deleted-logs?${query.toString()}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  })
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new Error(payload?.error || 'Unable to load deleted logs')
-  }
-
-  return payload?.logs || []
+  const { data, error } = await supabase.from('deleted_activity_logs')
+    .select('id,group_id,deleted_by,item_type,item_id,item_snapshot,deleted_at,expires_at,profiles:deleted_by(id,display_name,email,avatar_url,avatar_color)')
+    .eq('group_id', groupId).gt('expires_at', new Date().toISOString()).order('deleted_at', { ascending: false }).limit(50)
+  if (error) throw error
+  return data || []
 }
 
 export async function deleteAccountData() {
@@ -1410,7 +1401,7 @@ export async function fetchGroupData({ groupId, userId = null, skipCache = false
     const { group, members, usersById } = await fetchGroupMembers(groupId)
     if (!group) return null
 
-    const [telegramResult, expensesResult, paymentsResult, activityEventsResult] = await Promise.all([
+    const [telegramResult, expensesResult, paymentsResult, activityEventsResult, preferenceResult] = await Promise.all([
       supabase
         .from('telegram_connections')
         .select('telegram_chat_id,telegram_group_name,is_active,expense_alerts_enabled,payment_alerts_enabled,daily_reminder_enabled,reminder_hour,reminder_minute,reminder_timezone,last_daily_reminder_date')
@@ -1421,13 +1412,14 @@ export async function fetchGroupData({ groupId, userId = null, skipCache = false
         .select('*')
         .eq('group_id', groupId)
         .order('created_at', { ascending: false }),
-      supabase.from('payments').select('id,group_id,from_user_id,to_user_id,amount,created_at').eq('group_id', groupId),
+      supabase.from('payments').select('*').eq('group_id', groupId),
       supabase
         .from('activity_events')
         .select('id,group_id,actor_user_id,event_type,payload,created_at')
         .eq('group_id', groupId)
         .order('created_at', { ascending: false })
         .limit(30),
+      userId ? supabase.from('group_user_preferences').select('archived_at').eq('group_id', groupId).eq('user_id', userId).maybeSingle() : Promise.resolve({ data: null }),
     ])
 
     const telegramConnection = telegramResult.data
@@ -1443,6 +1435,7 @@ export async function fetchGroupData({ groupId, userId = null, skipCache = false
 
     const activityEvents = activityEventsResult.data || []
     if (activityEventsResult.error) throw activityEventsResult.error
+    if (preferenceResult.error) throw preferenceResult.error
 
     const expenseIds = expenses.map((expense) => expense.id)
     let splits = []
@@ -1482,6 +1475,7 @@ export async function fetchGroupData({ groupId, userId = null, skipCache = false
     const result = {
       group: {
         ...group,
+        is_archived: Boolean(preferenceResult.data?.archived_at),
         telegram_connected: Boolean(telegramConnection?.is_active),
         telegram_group_name: telegramConnection?.telegram_group_name || null,
         telegram_chat_id: telegramConnection?.telegram_chat_id || null,
@@ -1522,7 +1516,7 @@ export async function fetchGroupData({ groupId, userId = null, skipCache = false
 }
 
 
-export async function addExpense({
+async function saveExpense({
   groupId,
   amount,
   description,
@@ -1534,31 +1528,42 @@ export async function addExpense({
   baseCurrency = 'SGD',
   createdBy,
   splitValues,
+  expenseToEdit = null,
+  acknowledgePayments = false,
+  reviewedQuote = null,
+  requestId = null,
 }) {
+  const reject = message => Object.assign(new Error(message), { definitelyRejected: true })
   const cleanMembers = Array.from(new Set(splitMembers))
   if (!amount || !description || cleanMembers.length === 0) {
-    throw new Error('Expense amount, description, and split members are required')
+    throw reject('Expense amount, description, and split members are required')
   }
 
   const normalizedSplitType = splitType || 'equal'
   const normalizedCurrency = String(currency || baseCurrency || 'SGD').trim().toUpperCase()
   const normalizedBaseCurrency = String(baseCurrency || 'SGD').trim().toUpperCase()
   const originalAmount = round2(amount)
-  if (originalAmount <= 0) {
-    throw new Error('Expense amount must be greater than 0')
+  if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+    throw reject('Expense amount must be greater than 0')
   }
 
-  const quote =
-    normalizedCurrency === normalizedBaseCurrency
-      ? { rate: 1, asOfDate: new Date().toISOString().slice(0, 10), source: 'identity' }
-      : await fetchLiveExchangeRate({ fromCurrency: normalizedCurrency, toCurrency: normalizedBaseCurrency })
+  if (reviewedQuote && !quoteMatches(reviewedQuote, normalizedCurrency, normalizedBaseCurrency)) {
+    throw reject('The reviewed quote belongs to a different currency. Review the conversion again.')
+  }
+  const quote = normalizedCurrency === normalizedBaseCurrency
+    ? { rate: 1, asOfDate: new Date().toISOString().slice(0, 10), source: 'identity' }
+    : expenseToEdit?.original_currency === normalizedCurrency && Number(expenseToEdit.exchange_rate) > 0
+      ? normalizeExpenseQuote({ rate: expenseToEdit.exchange_rate, asOfDate: expenseToEdit.exchange_rate_date,
+        source: expenseToEdit.exchange_rate_source, saved: true }, normalizedCurrency, normalizedBaseCurrency)
+      : quoteMatches(reviewedQuote, normalizedCurrency, normalizedBaseCurrency)
+        ? reviewedQuote : await fetchExpenseQuote({ fromCurrency: normalizedCurrency, toCurrency: normalizedBaseCurrency })
 
   const exchangeRate = Number(quote.rate || 0)
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
-    throw new Error(`Unable to convert ${normalizedCurrency} to ${normalizedBaseCurrency}`)
+    throw reject(`Unable to convert ${normalizedCurrency} to ${normalizedBaseCurrency}`)
   }
 
-  const numericAmount = round2(originalAmount * exchangeRate)
+  const numericAmount = convertedExpenseAmount(originalAmount, normalizedCurrency, exchangeRate, expenseToEdit)
   let shareAmounts = splitEvenly(numericAmount, cleanMembers.length)
 
   if (normalizedSplitType === 'exact') {
@@ -1567,14 +1572,14 @@ export async function addExpense({
     const sumOriginal = round2(parsedOriginal.reduce((acc, value) => acc + value, 0))
 
     if (!valid || parsedOriginal.every((value) => value === 0)) {
-      throw new Error('Enter valid exact amounts for at least one member')
+      throw reject('Enter valid exact amounts for at least one member')
     }
 
     if (sumOriginal !== originalAmount) {
-      throw new Error('Exact split amounts must add up to the total')
+      throw reject('Exact split amounts must add up to the total')
     }
 
-    const convertedShares = parsedOriginal.map((value) => round2(value * exchangeRate))
+    const convertedShares = parsedOriginal.map((value) => convertedExpenseAmount(value, normalizedCurrency, exchangeRate))
     const convertedSum = round2(convertedShares.reduce((acc, value) => acc + value, 0))
     const conversionDelta = round2(numericAmount - convertedSum)
 
@@ -1593,11 +1598,11 @@ export async function addExpense({
     const sum = round2(percentages.reduce((acc, value) => acc + value, 0))
 
     if (!valid || percentages.every((value) => value === 0)) {
-      throw new Error('Enter valid percentages for at least one member')
+      throw reject('Enter valid percentages for at least one member')
     }
 
     if (sum !== 100) {
-      throw new Error('Percentages must add up to 100%')
+      throw reject('Percentages must add up to 100%')
     }
 
     shareAmounts = splitByWeights(numericAmount, percentages)
@@ -1615,115 +1620,70 @@ export async function addExpense({
     original_currency: normalizedCurrency,
     exchange_rate: normalizedCurrency === normalizedBaseCurrency ? null : exchangeRate,
     exchange_rate_source: normalizedCurrency === normalizedBaseCurrency ? 'identity' : quote.source || 'frankfurter',
-    exchange_rate_date: quote.asOfDate || new Date().toISOString().slice(0, 10),
+    exchange_rate_date: quote.asOfDate || null,
   }
 
-  let insertResponse = await supabase.from('expenses').insert(expensePayload).select('*').single()
-
-  if (insertResponse.error) {
-    const code = String(insertResponse.error.code || '')
-    if (code === '42703') {
-      const legacyPayload = {
-        ...expensePayload,
-      }
-      delete legacyPayload.exchange_rate_source
-      delete legacyPayload.exchange_rate_date
-      insertResponse = await supabase.from('expenses').insert(legacyPayload).select('*').single()
-    }
+  if (expenseToEdit) {
+    // The RPC checks identity, membership and revision, then saves all rows atomically.
+    const { data, error } = await supabase.rpc('correct_expense', {
+      p_expense_id: expenseToEdit.id,
+      p_expected_revision: expenseToEdit.revision || 0,
+      p_expense: expensePayload,
+      p_splits: cleanMembers.map((userId, index) => ({ user_id: userId, amount: shareAmounts[index] })),
+      p_acknowledge_payments: acknowledgePayments,
+    })
+    if (error) throw new Error(error.message || 'Unable to save this correction')
+    clearReadCaches({ groupId, userId: createdBy })
+    return data
   }
 
-  const expense = insertResponse.data
-  const expenseError = insertResponse.error
-  if (expenseError) throw expenseError
+  if (!requestId) throw reject('An expense request ID is required. Reopen the form.')
+  // One authenticated transaction writes the ledger, activity and existing alert.
+  try {
+    const { data, error } = await supabase.rpc('create_group_expense', {
+      p_group_id: groupId, p_request_id: requestId, p_expense: expensePayload,
+      p_splits: cleanMembers.map((userId, index) => ({ user_id: userId, amount: shareAmounts[index] })),
+    })
+    if (error) throw Object.assign(new Error(error.message || 'Unable to save expense'), {
+      definitelyRejected: /^(P0001|22|23|42501)/.test(String(error.code || '')),
+    })
+    return data
+  } finally { clearReadCaches({ groupId, userId: createdBy }) }
 
-  const splitRows = cleanMembers.map((userId, index) => ({
-    expense_id: expense.id,
-    user_id: userId,
-    amount: shareAmounts[index],
-    is_settled: paidBy === userId,
-  }))
-
-  const { error: splitError } = await supabase.from('expense_splits').insert(splitRows)
-  if (splitError) throw splitError
-
-  const { error: activityError } = await supabase.from('activity_events').insert({
-    group_id: groupId,
-    actor_user_id: createdBy,
-    event_type: 'expense_added',
-    payload: {
-      expense_id: expense.id,
-      description: expense.description,
-      amount: expense.amount,
-    },
-  })
-
-  if (activityError) throw activityError
-
-  await enqueueTelegramNotification({
-    groupId,
-    eventType: 'expense_added',
-    payload: {
-      expense_id: expense.id,
-      description: expense.description,
-      amount: expense.amount,
-      paid_by: paidBy,
-      created_by: createdBy,
-      split_member_count: cleanMembers.length,
-      currency: currency || null,
-      split_type: normalizedSplitType,
-    },
-  })
-
-  clearReadCaches({ groupId, userId: createdBy })
-  return expense
 }
 
-export async function recordPayment({ groupId, fromUserId, toUserId, amount, createdBy }) {
-  const paymentAmount = round2(amount)
-  if (paymentAmount <= 0) throw new Error('Payment amount must be greater than 0')
+export const addExpense = (input) => saveExpense(input)
+export const updateExpense = (input) => saveExpense(input)
 
-  const { data, error } = await supabase
-    .from('payments')
-    .insert({
-      group_id: groupId,
-      from_user_id: fromUserId,
-      to_user_id: toUserId,
-      amount: paymentAmount,
-      created_by: createdBy,
-    })
-    .select('*')
-    .single()
+export async function fetchExpenseHistory(expenseId) {
+  const { data, error } = await supabase.from('expense_change_history').select('*').eq('expense_id', expenseId).order('created_at', { ascending: false })
+  if (error) throw new Error('Unable to load change history. Try reopening this expense.')
+  return data || []
+}
 
-  if (error) throw error
-
-  const { error: activityError } = await supabase.from('activity_events').insert({
-    group_id: groupId,
-    actor_user_id: createdBy,
-    event_type: 'payment_recorded',
-    payload: {
-      payment_id: data.id,
-      from_user_id: fromUserId,
-      to_user_id: toUserId,
-      amount: paymentAmount,
-    },
+export async function recordPayment({ groupId, fromUserId, toUserId, amount, createdBy, requestId, expectedRevision }) {
+  const { data, error } = await supabase.rpc('record_group_payment', {
+    p_group_id: groupId, p_from: fromUserId, p_to: toUserId, p_amount: amount,
+    p_request_id: requestId, p_expected_revision: expectedRevision,
   })
-
-  if (activityError) throw activityError
-
-  await enqueueTelegramNotification({
-    groupId,
-    eventType: 'payment_recorded',
-    payload: {
-      payment_id: data.id,
-      from_user_id: fromUserId,
-      to_user_id: toUserId,
-      amount: paymentAmount,
-      created_by: createdBy,
-    },
-  })
-
   clearReadCaches({ groupId, userId: createdBy })
+  if (error) throw error
   return data
+}
+
+export async function changePayment({ payment, action, reason, userId }) {
+  const { data, error } = await supabase.rpc('change_group_payment', {
+    p_payment_id: payment.id, p_expected_revision: payment.revision || 0, p_action: action, p_reason: reason || null,
+  })
+  if (error) throw error
+  clearReadCaches({ groupId: payment.group_id, userId })
+  return data
+}
+
+export async function fetchPaymentHistory(paymentId) {
+  const { data, error } = await supabase.from('payment_change_history').select('*').eq('payment_id', paymentId).order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
 export async function saveProfile({ userId, profile }) {
@@ -1788,6 +1748,33 @@ export async function removeAvatar({ avatarUrl }) {
   }
 }
 
+export async function setGroupArchived({ groupId, userId, archived }) {
+  if (!groupId || !userId) throw new Error('Please sign in again to archive this group')
+  const { data, error } = await supabase.from('group_user_preferences')
+    .upsert({ group_id: groupId, user_id: userId, archived_at: archived ? new Date().toISOString() : null }, { onConflict: 'user_id,group_id' })
+    .select('group_id,archived_at').single()
+  if (error) throw error
+  clearReadCaches({ groupId, userId })
+  return data
+}
+
+export async function fetchActivityPage(cursor = null) {
+  const pageSize = 30
+  let query = supabase.from('activity_feed').select('*')
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(pageSize + 1)
+  if (cursor) {
+    // Keyset pagination remains stable when new events arrive between page loads.
+    const timestamp = new Date(cursor.created_at).toISOString()
+    if (!/^(event|expense|payment|deleted):[a-f0-9-]{36}$/i.test(cursor.id)) throw new Error('Invalid activity cursor')
+    query = query.or(`created_at.lt.${timestamp},and(created_at.eq.${timestamp},id.lt.${cursor.id})`)
+  }
+  const { data, error } = await query
+  if (error) throw error
+  const rows = (data || []).slice(0, pageSize)
+  const last = rows.at(-1)
+  return { rows, nextCursor: data?.length > pageSize ? { created_at: last.created_at, id: last.id } : null }
+}
+
 export async function fetchInsightsData(groupId) {
   const { group, members, usersById, expenses } = await fetchGroupData({ groupId, userId: null })
   if (!group) return null
@@ -1827,18 +1814,18 @@ export async function fetchInsightsData(groupId) {
     value,
   }))
 
-  const topExpense = expenses[0]
-  const sortedDates = expenses.map((expense) => expense.created_at).filter(Boolean).sort((a, b) => new Date(b) - new Date(a))
-  const mostActiveDay = sortedDates[0]
+  const { topExpense, mostActiveDay, mostActiveDayCount } = summarizeExpenses(expenses)
 
   return {
     group,
     members,
     usersById,
     totalSpend: round2(expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)),
+    expenses,
     byPerson,
     byCategory,
     topExpense,
     mostActiveDay,
+    mostActiveDayCount,
   }
 }

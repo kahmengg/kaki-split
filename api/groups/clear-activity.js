@@ -57,6 +57,16 @@ export default async function handler(req, res) {
     return
   }
 
+  const { data: paymentRecords, error: paymentLookupError } = await adminSupabase.from('payments').select('id').eq('group_id', groupId).limit(1)
+  if (paymentLookupError) {
+    res.status(500).json({ error: 'Unable to check payment history' })
+    return
+  }
+  if (paymentRecords?.length) {
+    res.status(409).json({ error: 'This group has payment history. Correct individual records from their details instead of clearing the ledger.' })
+    return
+  }
+
   const { error: expenseDeleteError } = await adminSupabase.from('expenses').delete().eq('group_id', groupId)
   if (expenseDeleteError) {
     res.status(500).json({ error: expenseDeleteError.message || 'Unable to clear expense activity' })

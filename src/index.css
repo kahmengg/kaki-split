@@ -183,7 +183,7 @@
   .theme-dark .text-gray-600 { @apply text-slate-300; }
   .theme-dark .text-gray-500 { @apply text-slate-400; }
   .theme-dark .text-gray-400 { @apply text-slate-400; }
-  .theme-dark .text-gray-300 { @apply text-slate-500; }
+  .theme-dark .text-gray-300 { color: var(--text-muted); }
 
   .theme-dark .text-sky-700 { @apply text-sky-300; }
   .theme-dark .text-sky-600 { @apply text-sky-300; }
@@ -239,3 +239,64 @@
   }
 
 
+/* Swipe rows must be opaque so the concealed action cannot bleed through. */
+.swipe-row-surface { background-color: #fff; }
+.theme-dark .swipe-row-surface { background-color: #1e293b; }
+
+/* Shared mobile interaction tokens keep light and dark controls consistent. */
+:root {
+  --action-bg: #0369a1;
+  --text-muted: #475569;
+  --focus-color: #0369a1;
+}
+.theme-dark {
+  --action-bg: #0369a1;
+  --text-muted: #cbd5e1;
+  --focus-color: #7dd3fc;
+}
+body { min-height: 100dvh; }
+button, a, summary { touch-action: manipulation; }
+button { cursor: pointer; min-height: 44px; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid var(--focus-color);
+  outline-offset: 3px;
+}
+button.bg-sky-500, a.bg-sky-500 { background-color: var(--action-bg); }
+.theme-light .text-gray-400, .theme-light .text-gray-300 { color: var(--text-muted); }
+.theme-light .text-red-400 { color: #b91c1c; }
+.theme-light .text-sky-500 { color: #0369a1; }
+.theme-dark [class~="text-slate-500"] { color: var(--text-muted); }
+input:not([type=checkbox]):not([type=radio]), textarea, select { font-size: 1rem; }
+#expense-amount { font-size: clamp(2rem, 10vw, 3rem); }
+.theme-toggle { min-height: 44px; }
+button:has(> svg:only-child) { min-width: 44px; min-height: 44px; }
+dialog.app-bottom-sheet {
+  position: fixed;
+  inset: auto 0 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 430px;
+  padding: 0;
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  overflow: hidden;
+  color: inherit;
+  background: white;
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 15%);
+}
+dialog.app-bottom-sheet[open] { display: flex; flex-direction: column; }
+dialog.app-bottom-sheet::backdrop { background: rgb(0 0 0 / 45%); }
+.sheet-content { scroll-padding-block: 16px 140px; overscroll-behavior: contain; }
+.safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+.theme-light input::placeholder, .theme-light textarea::placeholder { color: #64748b; }

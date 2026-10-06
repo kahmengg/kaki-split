@@ -156,7 +156,7 @@ export default function Profile() {
 
           <div className="relative">
             <Avatar user={profileUser} size="xl" />
-            <button onClick={handleAvatarPick} className="absolute -bottom-1 -right-1 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center border-2 border-white">
+            <button aria-label="Change profile photo" disabled={uploading || removingAvatar} onClick={handleAvatarPick} className="absolute -bottom-1 -right-1 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center border-2 border-white">
               <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path
                   strokeLinecap="round"
@@ -202,10 +202,10 @@ export default function Profile() {
 
           <div className="px-4 pb-4 space-y-3">
             <div>
-              <label className="text-xs font-semibold text-gray-400 block mb-1.5">Display name</label>
+              <label htmlFor="profile-name" className="text-sm font-semibold text-gray-600 block mb-1.5">Display name</label>
               <input
                 type="text"
-                value={name}
+                id="profile-name" autoComplete="name" value={name}
                 onChange={(event) => setName(event.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
               />
@@ -235,12 +235,12 @@ export default function Profile() {
 
           <div className="px-4 pb-4 space-y-3">
             <div>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5">
+              <label htmlFor="profile-paynow" className="flex items-center gap-2 text-sm font-semibold text-gray-600 mb-1.5">
                 <span className="w-5 h-5 bg-red-50 rounded-lg flex items-center justify-center text-sm">&#128241;</span>
                 PayNow number
               </label>
                 <input
-                  type="tel"
+                  id="profile-paynow" aria-describedby="paynow-help" type="tel"
                   inputMode="numeric"
                   maxLength={8}
                   value={paynow}
@@ -248,7 +248,7 @@ export default function Profile() {
                   placeholder="91234567"
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
                 />
-                <p className="text-xs text-gray-400 mt-1 ml-1">Enter 8-digit Singapore mobile number</p>
+                <p id="paynow-help" className="text-sm text-gray-600 mt-1 ml-1">Enter 8-digit Singapore mobile number</p>
 
             </div>
 

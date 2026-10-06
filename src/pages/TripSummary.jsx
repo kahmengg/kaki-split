@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast'
 import { useInsightsData } from '../hooks/useAppQueries'
 import { useAuth } from '../hooks/useAuth'
 import { CATEGORIES, formatMoney } from '../lib/format'
+import { recordedPeriod, summaryText } from '../lib/tripSummary'
 
 function categoryMeta(categoryId) {
   return CATEGORIES.find((item) => item.id === categoryId) || { icon: '📦', label: categoryId || 'Other' }
@@ -30,10 +31,18 @@ export default function TripSummary() {
 
   const members = useMemo(() => data?.members || [], [data?.members])
 
-  const shareText = useMemo(() => {
-    if (!data?.group) return 'Trip summary from Kaki Split.'
-    return `We spent ${formatMoney(data.totalSpend, data.group.base_currency)} on ${data.group.name}!`
-  }, [data?.group, data?.totalSpend])
+  const shareText = useMemo(() => summaryText(data), [data])
+
+  const handleCopy = async () => {
+    if (!data?.group) return
+    try {
+      // Copy stays independent of the native share sheet on mobile.
+      await navigator.clipboard.writeText(shareText)
+      showToast('Summary copied to clipboard', 'success')
+    } catch {
+      showToast('Unable to copy summary', 'error')
+    }
+  }
 
   const handleShare = async () => {
     if (!data?.group) return
@@ -42,20 +51,15 @@ export default function TripSummary() {
       try {
         await navigator.share({
           title: `${data.group.name} - Trip Summary`,
-          text: `${shareText} Check it out on Kaki Split.`,
+          text: shareText,
         })
-      } catch {
-        // User dismissed share sheet.
+      } catch (error) {
+        if (error.name !== 'AbortError') showToast('Unable to share summary. Try Copy text.', 'error')
       }
       return
     }
 
-    try {
-      await navigator.clipboard.writeText(shareText)
-      showToast('Summary copied to clipboard', 'success')
-    } catch {
-      showToast('Unable to copy summary', 'error')
-    }
+    await handleCopy()
   }
 
   if (loading) {
@@ -83,7 +87,7 @@ export default function TripSummary() {
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(`/groups/${id}`)} className="text-gray-500 -ml-1">
+          <button aria-label="Back to group" onClick={() => navigate(`/groups/${id}`)} className="text-gray-500 -ml-1">
             <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
@@ -112,13 +116,14 @@ export default function TripSummary() {
               </div>
 
               <h2 className="text-3xl font-black text-white mb-1">{data.group.name}</h2>
-              <p className="text-sky-200 text-sm mb-6">
-                {new Date().toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })}
+              <p className="text-white bg-black/30 rounded-lg px-2 py-1 text-sm mb-6 w-fit">
+                Recorded: {recordedPeriod(data.expenses)}
               </p>
 
               <div className="mb-6">
-                <p className="text-sky-200 text-sm font-medium">Total spent together</p>
-                <p className="text-5xl font-black text-white">{formatMoney(data.totalSpend, data.group.base_currency)}</p>
+                <p className="text-white bg-black/30 rounded-lg px-2 py-1 w-fit text-sm font-medium">Total spent together</p>
+                <p className="text-4xl sm:text-5xl font-black text-white break-words">{formatMoney(data.totalSpend, data.group.base_currency)}</p>
+                <p className="text-white text-sm mt-2">{data.expenses?.length || 0} expenses · {members.length} members</p>
               </div>
 
               <div className="flex -space-x-2 mb-6">
@@ -132,19 +137,19 @@ export default function TripSummary() {
                   {data.byCategory.slice(0, 4).map((category) => {
                     const meta = categoryMeta(category.name)
                     return (
-                      <div key={category.name} className="bg-white/15 rounded-2xl p-3">
+                      <div key={category.name} className="bg-black/30 rounded-2xl p-3">
                         <div className="text-lg mb-0.5">{meta.icon}</div>
                         <div className="text-white font-bold text-sm">{formatMoney(category.value, data.group.base_currency)}</div>
-                        <div className="text-white/60 text-xs">{meta.label}</div>
+                        <div className="text-white text-xs">{meta.label}</div>
                       </div>
                     )
                   })}
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-3 border-t border-white/20">
-                <p className="text-white/60 text-xs">{members.length} friends &middot; powered by Kaki Split</p>
-                <p className="text-white/60 text-xs">kakisplit.app</p>
+              <div className="flex flex-wrap gap-2 items-center justify-between p-3 bg-black/30 rounded-xl">
+                <p className="text-white text-xs">{members.length} members &middot; powered by Kaki Split</p>
+                <p className="text-white text-xs">kakisplit.app</p>
               </div>
             </div>
           </div>
@@ -162,7 +167,7 @@ export default function TripSummary() {
             Share
           </button>
           <button
-            onClick={handleShare}
+            onClick={handleCopy}
             className="flex-1 py-4 bg-white border-2 border-gray-200 text-gray-700 rounded-2xl font-bold flex items-center justify-center gap-2"
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -172,10 +177,10 @@ export default function TripSummary() {
           </button>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-4">Share this recap with your group</p>
+        <p className="text-center text-sm text-gray-500 mt-4">Share or copy a text recap for your group</p>
       </div>
 
-      <BottomNav groupId={id} onFABPress={() => navigate(`/groups/${id}`)} />
+      <BottomNav groupId={id} />
     </div>
   )
 }

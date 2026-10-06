@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 
 export const queryKeys = {
   dashboard: (userId) => ['dashboard', userId],
+  activity: (userId) => ['activity', userId],
   group: (groupId, userId) => ['group', groupId, userId || 'all'],
   insights: (groupId) => ['insights', groupId],
 }

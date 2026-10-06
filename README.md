@@ -258,15 +258,27 @@ Linked Telegram groups can manage notification settings directly in chat:
 
 `POST /api/scan-receipt` accepts `imageBase64` and `mimeType` for JPEG, PNG, or WebP images. It uses Gemini to return normalized merchant, total, currency, date, item, tax, service charge, and discount fields.
 
-Receipt scanning allows **five processing attempts per authenticated, non-anonymous account per Singapore calendar day**. The database reserves an attempt atomically before Gemini is called; unreadable images and provider failures still count. Invalid requests do not count, and database failures block processing. The sixth attempt returns HTTP 429 with `daily_scan_limit_reached`, quota metadata, and a `Retry-After` header. No cron is required: the server selects a new daily row at midnight Asia/Singapore.
+Receipt scanning allows **five scans per authenticated, non-anonymous account per Singapore calendar day**. The database reserves allowance atomically before Gemini is called; unreadable images still count, but provider/parser service failures return the reservation. A separate budget allows at most ten requests per account/day, including failed requests, to bound provider costs. Invalid requests do not count, and database failures block processing. Limits return HTTP 429 with `daily_scan_limit_reached` or `daily_scan_request_limit_reached`, quota metadata, and a `Retry-After` header. No cron is required: the server selects a new daily row at midnight Asia/Singapore. If refunding fails, the UI explicitly reports that the allowance could not be restored.
 
-For existing databases, apply `db/receipt-scan-quota.sql` before deploying the updated API. New setups include the same definitions in `supabase-schema.sql`. The table and reservation RPC are accessible only to `service_role`; client code cannot change counters. Usage rows reference `auth.users` and are removed on account deletion. These rows contain only account ID, date, and attempt count, not receipt images or extracted contents.
+For existing databases, apply the migrations in `supabase/migrations/` in order before deploying the updated API. New setups include the definitions in `supabase-schema.sql`. `db/receipt-scan-quota.sql` refreshes the quota functions after the usage table exists. Quota tables and reservation/refund RPCs are accessible only to `service_role`; client code cannot change counters. Usage rows reference `auth.users` and are removed on account deletion. These rows contain only account ID, date, and attempt count, not receipt images or extracted contents.
 
 The API makes one Gemini call per reserved attempt, with a 25-second timeout. `GEMINI_RECEIPT_MODEL` optionally overrides the default `gemini-3.1-flash-lite`. Keep this and `GEMINI_API_KEY` server-side. Uploads are limited to 3 MiB before base64 encoding to fit Vercel's request limit. The UI shows the remaining allowance after a scan; the database is always authoritative across devices and page refreshes.
 
 The quota is per account, not per person: separate accounts receive separate allowances. Free Gemini project quotas may also stop processing before every account uses five attempts. For free-tier demos, use synthetic receipts or cover personal details before uploading; the entire image is sent to Google.
 
 Run `bun run test` for API quota regression tests. `tests/receipt-scan-quota.sql` contains transactional database checks; run against the configured Supabase project after applying the SQL. Its changes roll back.
+
+## Expense Corrections and Review
+
+Open a group, then select **View details** below an expense to inspect its payer, recorder, category, allocations and saved FX rate. The recorder, group creator or delegated admin can choose **Edit expense**. Corrections save the expense, split rows, revision and before/after history in one database transaction. Members can read history but cannot create or modify history rows directly. Stale revisions are rejected rather than overwriting another correction. Group payments trigger an acknowledgement before balances are recalculated.
+
+Group creators and admins manage roles through **Group menu → Manage members**. Swipe an activity row left to reveal **Delete**; expense deletion requires an admin and confirmation, while payment deletion opens the reason form for an audited void. See [admin roles and swipe controls](docs/ADMIN_AND_SWIPE_CHANGES.md) and [the feature walkthrough](docs/REMAINING_FEATURES.md).
+
+Corrections retain the saved FX quote when the expense currency stays the same; changing currency obtains a new quote. Stored percentage shares are loaded as exact amounts because the original percentage inputs are not retained. Item names and receipt assignments are not reconstructed from the stored per-person allocations. Existing records have no retroactive correction history. Edits do not currently send Telegram correction notifications.
+
+Insights selects the largest expense and counts expenses per Singapore calendar day for the busiest day; ties select the most recent expense/day. Member spending means allocated expense shares, with a payer fallback for old expenses without split rows. Monetary chart tooltips use the group currency. The Home **View group** button only opens the group; debt banners do not imply a member sent a reminder.
+
+Run `tests/expense-corrections.sql` after migrations to check permissions, reconciliation, revision conflicts, payment acknowledgement and member/nonmember history access using synthetic records that roll back. See [the review walkthrough](docs/FIRST_THREE_CHANGES.md) for pages to inspect. Local `vite` serves the client, not Vercel API routes: receipt processing requires a server environment with the API deployed/configured.
 
 ## Verification
 

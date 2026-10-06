@@ -13,6 +13,9 @@ function getReceiptScanMessage(code, details = '') {
     image_required: 'Choose a receipt image first.',
     invalid_image: 'Choose a valid JPEG, PNG, or WebP receipt image.',
     daily_scan_limit_reached: 'You have used your 5 receipt scans today. Your allowance resets at midnight Singapore time.',
+    daily_scan_request_limit_reached: 'Scanning is paused after repeated requests today. Try again after midnight Singapore time, or enter the expense manually.',
+    scan_service_failed: 'The scanning service failed. Your scan allowance was returned. Try later or enter the expense manually.',
+    scan_refund_unavailable: 'The scanning service failed and we could not restore your allowance. Enter the expense manually; contact support if your allowance is incorrect.',
     scan_unavailable: 'Receipt scanning is temporarily unavailable. Please try again later.',
     unauthorized: 'Please sign in again before scanning a receipt.',
     unsupported_mime_type: 'Use a JPEG, PNG, or WebP receipt image.',
@@ -72,6 +75,7 @@ export function useReceiptScanner() {
       })
 
       const data = await response.json().catch(() => null)
+      if (!data || typeof data !== 'object') throw new Error(getReceiptScanMessage('scan_unavailable'))
       if (data?.quota) setQuota(data.quota)
       if (!response.ok) {
         // Keep server error codes internal and show people a useful next step.

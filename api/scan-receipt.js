@@ -30,7 +30,7 @@ function round2(value) {
 
 function normalizeCurrency(value) {
   const upper = String(value || '').trim().toUpperCase()
-  if (['SGD', 'MYR', 'IDR', 'THB'].includes(upper)) return upper
+  if (['SGD', 'USD', 'EUR', 'GBP', 'AUD', 'IDR', 'THB', 'MYR', 'JPY'].includes(upper)) return upper
   return 'SGD'
 }
 
@@ -135,12 +135,12 @@ export function createReceiptScanHandler({
       const { data, error } = await supabaseClient.rpc('reserve_receipt_scan', { p_user_id: user.id })
       const reservation = data?.[0]
       if (error || !reservation || typeof reservation.allowed !== 'boolean' ||
-        !Number.isInteger(reservation.remaining) || reservation.remaining < 0 || reservation.remaining > 4 ||
+        !Number.isInteger(reservation.remaining) || reservation.remaining < 0 || reservation.remaining > 5 ||
         !Number.isFinite(Date.parse(reservation.resets_at))) throw new Error('quota_unavailable')
       quota = { limit: 5, remaining: reservation.remaining, resetsAt: reservation.resets_at }
       if (!reservation.allowed) {
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((Date.parse(quota.resetsAt) - Date.now()) / 1000))))
-        res.status(429).json({ error: 'daily_scan_limit_reached', quota })
+        res.status(429).json({ error: reservation.reason === 'daily_request_limit' ? 'daily_scan_request_limit_reached' : 'daily_scan_limit_reached', quota })
         return
       }
     } catch {
@@ -168,7 +168,7 @@ Return this exact shape:
 }
 
 Rules:
-- currency must be SGD, MYR, IDR, or THB based on receipt clues. Default to SGD.
+- currency must be SGD, USD, EUR, GBP, AUD, IDR, THB, MYR, or JPY based on receipt clues. Default to SGD.
 - If an item has no clear price, omit it.
 - tax and service_charge are separate from items - do not include them in the items array.
 - total should be the final amount paid including tax and service charge.
@@ -178,7 +178,7 @@ Rules:
 
     try {
       const genAI = createGenAI(apiKey)
-      // One reservation permits one call; failures keep their consumed attempt.
+      // One reservation permits one call; the separate request budget remains bounded.
       const model = genAI.getGenerativeModel({ model: RECEIPT_MODEL })
       const result = await model.generateContent([
         {
@@ -211,8 +211,13 @@ Rules:
     } catch {
       // Do not log receipt contents or expose provider/key details to clients.
       console.error('Receipt scan failed')
+      const { data: remaining, error: refundError } = await supabaseClient.rpc('refund_receipt_scan', {
+        p_user_id: user.id, p_resets_at: quota.resetsAt,
+      }).catch(() => ({ error: true }))
+      const refunded = !refundError && Number.isInteger(remaining) && remaining >= 0 && remaining <= 5
+      if (refunded) quota = { ...quota, remaining }
       res.status(500).json({
-        error: 'parse_failed',
+        error: refunded ? 'scan_service_failed' : 'scan_refund_unavailable',
         quota,
       })
     }

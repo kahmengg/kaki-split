@@ -14,6 +14,11 @@ function setup({ quotaError = false, providerError = false, anonymous = false, u
   const supabaseClient = {
     auth: { getUser: async () => ({ data: { user: invalidToken ? null : { id: 'verified-user', is_anonymous: anonymous } } }) },
     rpc: async (name, args) => {
+      if (name === 'refund_receipt_scan') {
+        assert.equal(args.p_user_id, 'verified-user')
+        used = Math.max(0, used - 1)
+        return { data: 5 - used }
+      }
       assert.equal(name, 'reserve_receipt_scan')
       assert.deepEqual(args, { p_user_id: 'verified-user' })
       quotaCalls += 1
@@ -95,11 +100,11 @@ test('anonymous accounts cannot obtain a scan allowance', async () => {
   assert.equal(app.counts().quotaCalls, 0)
 })
 
-test('provider failures consume an attempt and never trigger fallback calls', async () => {
+test('provider failures return the allowance and never trigger fallback calls', async () => {
   const app = setup({ providerError: true })
   const response = await app.request()
   assert.equal(response.code, 500)
-  assert.equal(response.body.quota.remaining, 4)
+  assert.equal(response.body.quota.remaining, 5)
   assert.equal(response.body.details, undefined)
   assert.equal(app.counts().providerCalls, 1)
 })

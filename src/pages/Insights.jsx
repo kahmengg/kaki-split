@@ -15,11 +15,11 @@ const CATEGORY_COLOR = {
   other: '#94a3b8',
 }
 
-const CustomTooltip = ({ active, payload }) => {
+const CustomTooltip = ({ active, payload, currency }) => {
   if (active && payload?.length) {
     return (
       <div className="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs font-semibold shadow-lg">
-        {formatMoney(payload[0].value)}
+        {formatMoney(payload[0].value, currency)}
       </div>
     )
   }
@@ -83,7 +83,7 @@ export default function Insights() {
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="bg-white px-5 pt-12 pb-5 border-b border-gray-100">
         <div className="flex items-center gap-3 mb-1">
-          <button onClick={() => navigate(`/groups/${id}`)} className="text-gray-500 -ml-1">
+          <button onClick={() => navigate(`/groups/${id}`)} className="text-gray-500 -ml-1" aria-label="Back to group">
             <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
@@ -101,10 +101,11 @@ export default function Insights() {
           <p className="text-4xl font-black">{formatMoney(data.totalSpend, data.group.base_currency)}</p>
           <div className="flex gap-4 mt-3 pt-3 border-t border-white/20">
             <div>
-              <p className="text-sky-100 text-xs">Most active day</p>
+              <p className="text-sky-100 text-xs">Most active day (SG time)</p>
               <p className="text-white font-bold text-sm">
-                {data.mostActiveDay ? new Date(data.mostActiveDay).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }) : '-'}
+                {data.mostActiveDay ? new Date(`${data.mostActiveDay}T12:00:00+08:00`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' }) : '-'}
               </p>
+              {data.mostActiveDayCount > 0 && <p className="text-xs text-sky-100">{data.mostActiveDayCount} {data.mostActiveDayCount === 1 ? 'expense' : 'expenses'}</p>}
             </div>
             <div className="w-px bg-white/20" />
             <div>
@@ -131,7 +132,8 @@ export default function Insights() {
         )}
 
         <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-4">Spend by person</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Spending by member</p>
+          <p className="text-xs text-gray-500 mb-4">Allocated shares of expenses, rather than amounts paid. Older expenses without allocations use the payer.</p>
           <div className="space-y-3">
             {data.byPerson.map((person) => (
               <div key={person.id}>
@@ -201,7 +203,7 @@ export default function Insights() {
             <BarChart data={data.byPerson} barSize={32}>
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af', fontWeight: 600 }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f9fafb', radius: 8 }} />
+              <Tooltip content={<CustomTooltip currency={data.group.base_currency} />} cursor={{ fill: '#f9fafb', radius: 8 }} />
               <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
                 {data.byPerson.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />

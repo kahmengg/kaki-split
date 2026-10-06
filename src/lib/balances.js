@@ -24,6 +24,7 @@ export function computeNetBalances({ memberIds, expenses, splitsByExpenseId, pay
   }
 
   for (const payment of payments) {
+    if (payment.voided_at) continue
     const amount = Number(payment.amount || 0)
     net.set(payment.from_user_id, round2((net.get(payment.from_user_id) || 0) + amount))
     net.set(payment.to_user_id, round2((net.get(payment.to_user_id) || 0) - amount))
@@ -41,8 +42,9 @@ export function settleNetBalances(net) {
     if (amount < -0.009) debtors.push({ userId, amount: round2(Math.abs(amount)) })
   }
 
-  creditors.sort((a, b) => b.amount - a.amount)
-  debtors.sort((a, b) => b.amount - a.amount)
+  const order = (a, b) => b.amount - a.amount || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0)
+  creditors.sort(order)
+  debtors.sort(order)
 
   const flows = []
   let i = 0

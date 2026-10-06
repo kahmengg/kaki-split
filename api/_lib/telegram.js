@@ -761,7 +761,7 @@ export async function queueDailyTelegramReminders({ now = new Date() } = {}) {
     const [{ data: members, error: membersError }, { data: expenses, error: expensesError }, { data: payments, error: paymentsError }] = await Promise.all([
         adminSupabase.from('group_members').select('user_id').eq('group_id', row.group_id),
         adminSupabase.from('expenses').select('id,amount,paid_by,description').eq('group_id', row.group_id),
-        adminSupabase.from('payments').select('from_user_id,to_user_id,amount').eq('group_id', row.group_id),
+        adminSupabase.from('payments').select('from_user_id,to_user_id,amount').eq('group_id', row.group_id).is('voided_at', null),
     ])
 
     if (membersError) throw membersError
