@@ -84,39 +84,11 @@ vercel.json             SPA rewrites, API rewrites, and cron configuration
 - `/api/fx/quote` to `/api/fx`
 - `/api/fx/prewarm` to `/api/fx?action=prewarm`
 
-## Environment Variables
-
-Create a local `.env` file for development. Do not commit real secrets.
-
-```bash
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_AUTH_REDIRECT_BASE_URL=
-VITE_APP_URL=
-
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-APP_URL=
-GEMINI_API_KEY=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_WEBHOOK_SECRET=
-CRON_SECRET=
-```
-
-Notes:
-
-- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are required by the browser app.
-- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are required by serverless routes that perform privileged Supabase operations.
-- `APP_URL` is used in Telegram reminder links.
-- `CRON_SECRET` is required for Telegram and FX cron-style endpoints. Vercel Cron sends it as a bearer token when the environment variable is configured.
-- `TELEGRAM_WEBHOOK_SECRET` is required for Telegram webhooks. Use the same value when setting Telegram's `secret_token`.
-- Client-side runtime errors are captured by the React error boundary and logged locally. Use Sentry or another hosted logger for production-scale monitoring without adding another Vercel Hobby function.
 
 ## Database Setup
 
-Run `supabase-schema.sql` in the Supabase SQL editor for a new project. It creates the app tables, profile trigger, RLS policies, indexes, Telegram tables, FX cache table, and storage policies expected by the code.
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/8fafe196-3615-4eac-b748-6bb37ff11c9a" />
 
-Create a public Supabase Storage bucket named `avatars` if it does not already exist. The schema includes policies for users to manage files under their own user-id folder.
 
 ## Local Development
 
